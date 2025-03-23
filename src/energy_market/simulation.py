@@ -50,8 +50,11 @@ class EnergyMarketSimulation:
         Args:
             num_steps: Number of steps to run (default: 1 week of hourly steps)
         """
-        for _ in range(num_steps):
+        print(f"\nRunning simulation for {num_steps} steps...")
+        for step in range(num_steps):
+            print(f"\rStep {step + 1}/{num_steps} ({(step + 1) / num_steps * 100:.1f}%)", end="", flush=True)
             self.model.step()
+        print("\nSimulation complete!")
             
     def get_model_data(self) -> pd.DataFrame:
         """Get model-level data from simulation.

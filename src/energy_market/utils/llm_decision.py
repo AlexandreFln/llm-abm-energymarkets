@@ -1,17 +1,24 @@
 from typing import Dict, Any, Optional
 import json
 from langchain_ollama import OllamaLLM
+import time
 
 class LLMDecisionMaker:
     """Class for making agent decisions using LLMs."""
     
-    def __init__(self, model_name: str = "llama3.2:3b-instruct-fp16"):
+    def __init__(self, 
+                 model_name: str = "llama3.2:3b-instruct-fp16",
+                 timeout: float = 5.0):
         """Initialize LLM decision maker.
         
         Args:
             model_name: Name of the Ollama model to use
+            timeout: Timeout in seconds for LLM calls
         """
-        self.llm = OllamaLLM(model=model_name)
+        self.llm = OllamaLLM(
+            model=model_name,
+            timeout=timeout
+        )
         
     def _format_state_for_prompt(self, state: Dict[str, Any]) -> str:
         """Format agent state for prompt.
@@ -34,6 +41,23 @@ class LLMDecisionMaker:
                 
         return json.dumps(formatted_state, indent=2)
         
+    def _safe_llm_call(self, prompt: str, default_response: Dict[str, Any]) -> Dict[str, Any]:
+        """Make an LLM call with error handling and timeout.
+        
+        Args:
+            prompt: The prompt to send to the LLM
+            default_response: Default response to use if LLM call fails
+            
+        Returns:
+            Dict containing the decision
+        """
+        try:
+            response = self.llm.invoke(prompt)
+            return json.loads(response)
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"LLM call failed: {e}. Using default response.")
+            return default_response
+        
     def get_consumer_decision(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Get consumer decision about energy purchases.
         
@@ -43,6 +67,13 @@ class LLMDecisionMaker:
         Returns:
             Dict containing decision details
         """
+        default_response = {
+            "action": "wait",
+            "max_price": state.get("max_price_tolerance", 100),
+            "target_amount": state.get("energy_needs", 0),
+            "prefer_renewable": state.get("green_energy_preference", 0.5) > 0.5
+        }
+        
         prompt = f"""You are an energy consumer making decisions about energy purchases.
 Given your current state:
 
@@ -66,24 +97,15 @@ Respond with a JSON object containing:
 - "prefer_renewable": Whether to prioritize renewable sources
 
 Example response:
-{{
+{
     "action": "buy_utility",
     "max_price": 120.0,
     "target_amount": 100.0,
     "prefer_renewable": true
-}}
+}
 """
-        response = self.llm.invoke(prompt)
-        try:
-            return json.loads(response)
-        except json.JSONDecodeError:
-            return {
-                "action": "wait",
-                "max_price": state.get("max_price_tolerance", 100),
-                "target_amount": state.get("energy_needs", 0),
-                "prefer_renewable": state.get("green_energy_preference", 0.5) > 0.5
-            }
-            
+        return self._safe_llm_call(prompt, default_response)
+        
     def get_prosumer_decision(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Get prosumer decision about energy production and sales.
         
@@ -93,6 +115,14 @@ Example response:
         Returns:
             Dict containing decision details
         """
+        default_response = {
+            "sell_amount": 0.0,
+            "selling_price": state.get("current_price", 100),
+            "use_storage": 0.0,
+            "store_amount": state.get("current_production", 0),
+            "consider_upgrade": False
+        }
+        
         prompt = f"""You are a prosumer (consumer who also produces energy) making decisions about energy production and sales.
 Given your current state:
 
@@ -122,18 +152,8 @@ Example response:
     "consider_upgrade": false
 }
 """
-        response = self.llm.invoke(prompt)
-        try:
-            return json.loads(response)
-        except json.JSONDecodeError:
-            return {
-                "sell_amount": 0.0,
-                "selling_price": state.get("current_price", 100),
-                "use_storage": 0.0,
-                "store_amount": state.get("current_production", 0),
-                "consider_upgrade": False
-            }
-            
+        return self._safe_llm_call(prompt, default_response)
+        
     def get_producer_decision(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Get producer decision about energy production and pricing.
         
@@ -143,6 +163,14 @@ Example response:
         Returns:
             Dict containing decision details
         """
+        default_response = {
+            "production_level": state.get("max_capacity", 0) * 0.8,
+            "price": state.get("current_price", 100),
+            "accept_contracts": True,
+            "min_contract_duration": 30,
+            "consider_upgrade": False
+        }
+        
         prompt = f"""You are an energy producer making decisions about production levels and pricing.
 Given your current state:
 
@@ -172,18 +200,8 @@ Example response:
     "consider_upgrade": true
 }
 """
-        response = self.llm.invoke(prompt)
-        try:
-            return json.loads(response)
-        except json.JSONDecodeError:
-            return {
-                "production_level": state.get("max_capacity", 0) * 0.8,
-                "price": state.get("current_price", 100),
-                "accept_contracts": True,
-                "min_contract_duration": 30,
-                "consider_upgrade": False
-            }
-            
+        return self._safe_llm_call(prompt, default_response)
+        
     def get_utility_decision(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Get utility decision about energy procurement and pricing.
         
@@ -193,6 +211,14 @@ Example response:
         Returns:
             Dict containing decision details
         """
+        default_response = {
+            "target_contracts": 1,
+            "max_purchase_price": state.get("current_buying_price", 80),
+            "selling_price": state.get("current_selling_price", 100),
+            "renewable_target": state.get("renewable_quota", 0.2),
+            "storage_strategy": "maintain"
+        }
+        
         prompt = f"""You are an energy utility company making decisions about energy procurement and pricing.
 Given your current state:
 
@@ -222,18 +248,8 @@ Example response:
     "storage_strategy": "increase"
 }
 """
-        response = self.llm.invoke(prompt)
-        try:
-            return json.loads(response)
-        except json.JSONDecodeError:
-            return {
-                "target_contracts": 1,
-                "max_purchase_price": state.get("current_buying_price", 80),
-                "selling_price": state.get("current_selling_price", 100),
-                "renewable_target": state.get("renewable_quota", 0.2),
-                "storage_strategy": "maintain"
-            }
-            
+        return self._safe_llm_call(prompt, default_response)
+        
     def get_regulator_decision(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Get regulator decision about market intervention.
         
@@ -243,6 +259,14 @@ Example response:
         Returns:
             Dict containing decision details
         """
+        default_response = {
+            "adjust_carbon_tax": 0.0,
+            "price_intervention": False,
+            "max_price_increase": state.get("max_price_increase", 0.2),
+            "enforce_renewable_quota": True,
+            "issue_warnings": []
+        }
+        
         prompt = f"""You are an energy market regulator making decisions about market intervention.
 Given your current state:
 
@@ -272,14 +296,4 @@ Example response:
     "issue_warnings": ["price_gouging", "market_concentration"]
 }
 """
-        response = self.llm.invoke(prompt)
-        try:
-            return json.loads(response)
-        except json.JSONDecodeError:
-            return {
-                "adjust_carbon_tax": 0.0,
-                "price_intervention": False,
-                "max_price_increase": state.get("max_price_increase", 0.2),
-                "enforce_renewable_quota": True,
-                "issue_warnings": []
-            } 
+        return self._safe_llm_call(prompt, default_response) 

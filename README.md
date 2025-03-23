@@ -1,81 +1,144 @@
-# llm-abm-energymarkets
-A research repository on LLM-powered Agent-Based Modeling (ABM) for energy markets
+# LLM-Powered Energy Market Simulation
 
+This project implements an Agent-Based Model (ABM) of an energy market with LLM-powered decision-making agents. The simulation models interactions between consumers, prosumers, energy producers, utilities, and a market regulator to study market dynamics, renewable energy adoption, and policy impacts.
 
-# Phase 1: Research & Setup
+## Features
 
-## ✅ Define System Scope
-Objective: Define the model scope, set up the development environment, and prepare data sources.
-### Identify agent types
+- Multiple agent types with distinct behaviors:
+  - **Consumers**: Purchase energy from utilities or local prosumers
+  - **Prosumers**: Both produce and consume energy, can sell excess
+  - **Energy Producers**: Generate and sell energy to utilities
+  - **Utilities**: Buy from producers and sell to consumers
+  - **Regulator**: Oversees market dynamics and implements policies
 
-All agents have one goal which is to maximise their profit.
+- LLM-powered decision making for all agents
+- Market mechanisms:
+  - Dynamic pricing based on supply and demand
+  - Contract-based energy trading
+  - Renewable energy incentives
+  - Carbon taxation
+  - Market concentration monitoring
 
-- **Consumer**:
-    - Type: None
-    - Attributes: persona, initial resources, energy mix, energy needs, buying price (from prosumers), distance from grid ?
-    - Actions: do nothing, buy from utility, buy from local grid (prosumer)
-<br> 
-<br>
+- Comprehensive analytics and visualization:
+  - Price trends
+  - Supply-demand balance
+  - Renewable energy adoption
+  - Market concentration
+  - Agent resources and profits
+  - Detailed simulation reports
 
-- **Prosumer (inherited from Consumer)**: consumer that also produces energy locally and can either sell it on the grid or use it for its personnal consumption 
-    - Type: photovoltaic (PV), wind, other
-    - Attributes: inherited from consumers, production level, max capacity of production, electricity storage level, selling price
-    - Objects: maintainance rate of the PV, lifetime of the PV
-    - Actions: inherited from consumer, change sell price on the local grid, change volume sold on the local grid, disconnect from local grid
-<br> 
-<br>
+## Installation
 
-- **Energy producer**: generate energy and determine their production levels, facility upgrades, and pricing strategies
-    - Type: oil, renewables
-    - State: connected energy suppliers/utilities
-    - Attributes: persona, initial resources, volume of production, max production capacity, production costs, price to sell energy to utility
-    - Actions: change price to sell energy to utility, invest money to upgrade facility max capacity
-<br> 
-<br>
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/llm-abm-energymarkets.git
+cd llm-abm-energymarkets
+```
 
-- **Energy utility**: purchase energy from producers and sell it to consumers
-    - Type: eco-friendly, balanced, greedy
-    - Attributes: persona, initial resources, selling price to consumer, volume of energy to deal, regulatory constraint (% of renewable to buy)
-    - Actions: change price to sell energy to consumer, select energy supplier company, risk hedging by negotiating future contracts
-<br> 
-<br>
+2. Install dependencies using Poetry:
+```bash
+poetry install
+```
 
-- ***Regulators***: dynamic regulation in reaction to market failures
-    - Type: None
-    - Attributes: persona
-    - Actions: Penalties & incentives (fines on price gouging or reward green energy investments)
+3. Install and start Ollama:
+```bash
+# Follow instructions at https://ollama.ai to install Ollama
+ollama pull llama3.2:3b-instruct-fp16
+```
 
+## Usage
 
----
+Run the simulation using the command-line interface:
 
-### Define market dynamics:
+```bash
+poetry run python -m energy_market [options]
+```
 
-- Scenario 1: 
-    -   Auction-based energy exchange for local grid
-    -   Contracts with secured price for utility supplier
-- Scenario 2: 
-    - Auction-based trading for everything
+Available options:
+- `--num-steps`: Number of simulation steps (default: 168, one week of hourly steps)
+- `--num-consumers`: Number of consumer agents (default: 100)
+- `--num-prosumers`: Number of prosumer agents (default: 20)
+- `--num-producers`: Number of producer agents (default: 10)
+- `--num-utilities`: Number of utility agents (default: 5)
+- `--initial-price`: Initial energy price (default: 100.0)
+- `--carbon-tax`: Carbon tax rate (default: 10.0)
+- `--renewable-incentive`: Renewable energy incentive (default: 5.0)
+- `--output-dir`: Output directory (default: results_YYYY-MM-DD_HH-MM-SS)
 
+Example:
+```bash
+poetry run python -m energy_market --num-steps 336 --num-consumers 200 --carbon-tax 15.0
+```
 
----
+## Project Structure
 
-### Select LLM use cases: 
+```
+src/energy_market/
+├── agents/
+│   ├── base.py          # Base agent class
+│   ├── consumer.py      # Consumer agent
+│   ├── prosumer.py      # Prosumer agent
+│   ├── producer.py      # Energy producer agent
+│   ├── utility.py       # Utility agent
+│   └── regulator.py     # Market regulator agent
+├── models/
+│   └── energy_market.py # Main market model
+├── utils/
+│   └── llm_decision.py  # LLM-based decision making
+├── simulation.py        # Simulation runner and analysis
+└── __main__.py         # CLI entry point
+```
 
-- Consumer:
-    - Decides wether to buy energy from utility or from the grid
-    - Decides from which utility / grid node buy energy
+## Output
 
-- Prosumer (inherited from Consumer):
-    - Decides wether to sell or consume energy produced
+The simulation generates the following outputs in the specified directory:
 
-- Energy producer:
-    - Determines energy production levels and selling prices
-    - Decides whether to upgrade facilities to increase production limits (considering the associated costs)
+1. Data files:
+   - `model_data.csv`: Time series of market-level metrics
+   - `agent_data.csv`: Time series of agent-level metrics
+   - `simulation_report.csv`: Summary statistics and insights
 
+2. Visualizations:
+   - `price_trends.png`: Energy price evolution
+   - `supply_demand.png`: Supply-demand balance
+   - `renewable_ratio.png`: Renewable energy adoption
+   - `market_concentration.png`: Market concentration (HHI)
+   - `agent_resources.png`: Distribution of agent resources
+   - `agent_profits.png`: Distribution of agent profits
 
-- Utility:
-    - Decides energy purchase amounts and consumer pricing to meet consumer demand
-    - Randomly assigned one of three personas: [environmentally conscious, greedy, depressed]
+## Agent Decision Making
 
-- *Regulator*:
-    - Decides wether to impose a policy to regulate the market
+Each agent type uses LLM-powered decision making with specialized prompts:
+
+1. **Consumers**:
+   - Evaluate utility and prosumer offers
+   - Consider price, renewable sources, and history
+   - Make purchase decisions
+
+2. **Prosumers**:
+   - Manage energy production and storage
+   - Set selling prices
+   - Consider capacity upgrades
+
+3. **Energy Producers**:
+   - Determine production levels
+   - Set prices and negotiate contracts
+   - Plan capacity investments
+
+4. **Utilities**:
+   - Manage energy procurement
+   - Set consumer prices
+   - Balance renewable quotas
+
+5. **Regulator**:
+   - Monitor market health
+   - Adjust carbon tax
+   - Enforce regulations
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
