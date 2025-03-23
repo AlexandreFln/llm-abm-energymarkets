@@ -1,0 +1,104 @@
+import argparse
+from pathlib import Path
+from datetime import datetime
+
+from .simulation import EnergyMarketSimulation
+
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description='Run energy market simulation with LLM-powered agents.'
+    )
+    
+    parser.add_argument(
+        '--num-steps',
+        type=int,
+        default=168,
+        help='Number of simulation steps (default: 168, one week of hourly steps)'
+    )
+    
+    parser.add_argument(
+        '--num-consumers',
+        type=int,
+        default=100,
+        help='Number of consumer agents (default: 100)'
+    )
+    
+    parser.add_argument(
+        '--num-prosumers',
+        type=int,
+        default=20,
+        help='Number of prosumer agents (default: 20)'
+    )
+    
+    parser.add_argument(
+        '--num-producers',
+        type=int,
+        default=10,
+        help='Number of producer agents (default: 10)'
+    )
+    
+    parser.add_argument(
+        '--num-utilities',
+        type=int,
+        default=5,
+        help='Number of utility agents (default: 5)'
+    )
+    
+    parser.add_argument(
+        '--initial-price',
+        type=float,
+        default=100.0,
+        help='Initial energy price (default: 100.0)'
+    )
+    
+    parser.add_argument(
+        '--carbon-tax',
+        type=float,
+        default=10.0,
+        help='Carbon tax rate (default: 10.0)'
+    )
+    
+    parser.add_argument(
+        '--renewable-incentive',
+        type=float,
+        default=5.0,
+        help='Renewable energy incentive (default: 5.0)'
+    )
+    
+    parser.add_argument(
+        '--output-dir',
+        type=str,
+        default=None,
+        help='Output directory (default: results_YYYY-MM-DD_HH-MM-SS)'
+    )
+    
+    return parser.parse_args()
+
+def main():
+    """Main function to run the simulation."""
+    args = parse_args()
+    
+    # Create output directory with timestamp if not specified
+    if args.output_dir is None:
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        output_dir = Path.cwd() / f'results_{timestamp}'
+    else:
+        output_dir = Path(args.output_dir)
+        
+    # Initialize and run simulation
+    simulation = EnergyMarketSimulation(
+        num_consumers=args.num_consumers,
+        num_prosumers=args.num_prosumers,
+        num_producers=args.num_producers,
+        num_utilities=args.num_utilities,
+        initial_price=args.initial_price,
+        carbon_tax_rate=args.carbon_tax,
+        renewable_incentive=args.renewable_incentive,
+        output_dir=str(output_dir)
+    )
+    
+    simulation.run_and_analyze(args.num_steps)
+
+if __name__ == '__main__':
+    main() 
