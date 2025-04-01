@@ -1,7 +1,15 @@
 from typing import Dict, Any, Optional
 import json
-from langchain_ollama import OllamaLLM
 import time
+from langchain_ollama import OllamaLLM
+from langchain_core.messages import HumanMessage, SystemMessage
+from ..prompts.system_prompts import (
+    CONSUMER_PROMPT,
+    PROSUMER_PROMPT,
+    PRODUCER_PROMPT,
+    UTILITY_PROMPT,
+    REGULATOR_PROMPT
+)
 
 class LLMDecisionMaker:
     """Class for making agent decisions using LLMs."""
@@ -34,28 +42,64 @@ class LLMDecisionMaker:
         for key, value in state.items():
             if isinstance(value, (float, int)):
                 formatted_state[key] = f"{value:.2f}"
-            elif isinstance(value, list) and len(value) > 5:
+            elif isinstance(value, list):
                 formatted_state[key] = value[-5:]  # Only show last 5 items
             else:
                 formatted_state[key] = value
                 
         return json.dumps(formatted_state, indent=2)
         
-    def _safe_llm_call(self, prompt: str, default_response: Dict[str, Any]) -> Dict[str, Any]:
+    def _safe_llm_call(self, prompt: str, default_response: Dict[str, Any], 
+                      agent_type: str = None) -> Dict[str, Any]:
         """Make an LLM call with error handling and timeout.
         
         Args:
             prompt: The prompt to send to the LLM
             default_response: Default response to use if LLM call fails
+            agent_type: Type of agent making the decision
             
         Returns:
             Dict containing the decision
         """
+        print("      Making LLM call...")
+        start_time = time.time()
+        
+        # Get appropriate system prompt based on agent type
+        system_prompt = ""
+        if agent_type == "consumer":
+            system_prompt = CONSUMER_PROMPT
+        elif agent_type == "prosumer":
+            system_prompt = PROSUMER_PROMPT
+        elif agent_type == "producer":
+            system_prompt = PRODUCER_PROMPT
+        elif agent_type == "utility":
+            system_prompt = UTILITY_PROMPT
+        elif agent_type == "regulator":
+            system_prompt = REGULATOR_PROMPT
+            
+        # Combine system prompt with task prompt
+        full_prompt = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=prompt)
+        ]
+        
         try:
-            response = self.llm.invoke(prompt)
-            return json.loads(response)
-        except (json.JSONDecodeError, Exception) as e:
-            print(f"LLM call failed: {e}. Using default response.")
+            response = self.llm.invoke(full_prompt)
+            try:
+                decision = json.loads(response)
+                elapsed = time.time() - start_time
+                print(f"      LLM call successful ({elapsed:.2f}s)")
+                return decision
+            except json.JSONDecodeError as e:
+                print(f"      Failed to parse LLM response: {e}")
+                print(f"      Raw response: {response}")
+                print("      Using default response")
+                return default_response
+            
+        except Exception as e:
+            elapsed = time.time() - start_time
+            print(f"      LLM call failed after {elapsed:.2f}s: {e}")
+            print("      Using default response")
             return default_response
         
     def get_consumer_decision(self, state: Dict[str, Any]) -> Dict[str, Any]:
@@ -68,43 +112,27 @@ class LLMDecisionMaker:
             Dict containing decision details
         """
         default_response = {
-            "action": "wait",
-            "max_price": state.get("max_price_tolerance", 100),
-            "target_amount": state.get("energy_needs", 0),
-            "prefer_renewable": state.get("green_energy_preference", 0.5) > 0.5
+            "best_offer": None,
+            "best_score": -1
         }
         
-        prompt = f"""You are an energy consumer making decisions about energy purchases.
-Given your current state:
+        prompt = f"""Given your current state:
 
 {self._format_state_for_prompt(state)}
 
-Decide whether to:
-1. Buy energy from a utility company
-2. Buy energy from local prosumers
-3. Wait for better prices
-
-Consider:
-- Your current resources and energy needs
-- Available prices and your price tolerance
-- Your preference for renewable energy
-- Your transaction history
+Among all available offers, choose the best offer and score it on a scale of 0 to 100.
 
 Respond with a JSON object containing:
-- "action": "buy_utility", "buy_local", or "wait"
-- "max_price": Maximum price willing to pay
-- "target_amount": Amount of energy to purchase
-- "prefer_renewable": Whether to prioritize renewable sources
+- "best_offer": The best offer
+- "best_score": The score of the best offer
 
 Example response:
-{
-    "action": "buy_utility",
-    "max_price": 120.0,
-    "target_amount": 100.0,
-    "prefer_renewable": true
-}
+{{
+    "best_offer": {{"seller_id": "utility1", "amount": 100.0, "price": 120.0, "is_renewable": true}},
+    "best_score": 85
+}}
 """
-        return self._safe_llm_call(prompt, default_response)
+        return self._safe_llm_call(prompt, default_response, "consumer")
         
     def get_prosumer_decision(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Get prosumer decision about energy production and sales.
@@ -117,14 +145,13 @@ Example response:
         """
         default_response = {
             "sell_amount": 0.0,
-            "selling_price": state.get("current_price", 100),
+            "selling_price": state.get("selling_price", 100),
             "use_storage": 0.0,
             "store_amount": state.get("current_production", 0),
             "consider_upgrade": False
         }
         
-        prompt = f"""You are a prosumer (consumer who also produces energy) making decisions about energy production and sales.
-Given your current state:
+        prompt = f"""Given your current state:
 
 {self._format_state_for_prompt(state)}
 
@@ -144,15 +171,15 @@ Respond with a JSON object containing:
 - "consider_upgrade": Whether to consider a capacity upgrade
 
 Example response:
-{
+{{
     "sell_amount": 50.0,
     "selling_price": 90.0,
     "use_storage": 20.0,
     "store_amount": 30.0,
     "consider_upgrade": false
-}
+}}
 """
-        return self._safe_llm_call(prompt, default_response)
+        return self._safe_llm_call(prompt, default_response, "prosumer")
         
     def get_producer_decision(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Get producer decision about energy production and pricing.
@@ -171,8 +198,7 @@ Example response:
             "consider_upgrade": False
         }
         
-        prompt = f"""You are an energy producer making decisions about production levels and pricing.
-Given your current state:
+        prompt = f"""Given your current state:
 
 {self._format_state_for_prompt(state)}
 
@@ -192,15 +218,15 @@ Respond with a JSON object containing:
 - "consider_upgrade": Whether to consider a capacity upgrade
 
 Example response:
-{
+{{
     "production_level": 800.0,
     "price": 95.0,
     "accept_contracts": true,
     "min_contract_duration": 30,
     "consider_upgrade": true
-}
+}}
 """
-        return self._safe_llm_call(prompt, default_response)
+        return self._safe_llm_call(prompt, default_response, "producer")
         
     def get_utility_decision(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Get utility decision about energy procurement and pricing.
@@ -219,8 +245,7 @@ Example response:
             "storage_strategy": "maintain"
         }
         
-        prompt = f"""You are an energy utility company making decisions about energy procurement and pricing.
-Given your current state:
+        prompt = f"""Given your current state:
 
 {self._format_state_for_prompt(state)}
 
@@ -240,15 +265,15 @@ Respond with a JSON object containing:
 - "storage_strategy": "increase", "decrease", or "maintain"
 
 Example response:
-{
+{{
     "target_contracts": 3,
     "max_purchase_price": 85.0,
     "selling_price": 110.0,
     "renewable_target": 0.25,
     "storage_strategy": "increase"
-}
+}}
 """
-        return self._safe_llm_call(prompt, default_response)
+        return self._safe_llm_call(prompt, default_response, "utility")
         
     def get_regulator_decision(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Get regulator decision about market intervention.
@@ -267,8 +292,7 @@ Example response:
             "issue_warnings": []
         }
         
-        prompt = f"""You are an energy market regulator making decisions about market intervention.
-Given your current state:
+        prompt = f"""Given your current state:
 
 {self._format_state_for_prompt(state)}
 
@@ -288,12 +312,12 @@ Respond with a JSON object containing:
 - "issue_warnings": List of warning types to issue
 
 Example response:
-{
+{{
     "adjust_carbon_tax": 5.0,
     "price_intervention": true,
     "max_price_increase": 0.15,
     "enforce_renewable_quota": true,
     "issue_warnings": ["price_gouging", "market_concentration"]
-}
+}}
 """
-        return self._safe_llm_call(prompt, default_response) 
+        return self._safe_llm_call(prompt, default_response, "regulator") 

@@ -34,7 +34,8 @@ class ConsumerAgent(EnergyMarketAgent):
         self.green_energy_preference = green_energy_preference
         self.current_utility: Optional[str] = None
         self.energy_balance = 0.0
-        
+    
+    #TODO: replace with LLM decision
     def evaluate_offer(self, price: float, is_renewable: bool) -> float:
         """Evaluate an energy offer based on price and source.
         
@@ -94,14 +95,23 @@ class ConsumerAgent(EnergyMarketAgent):
         market_state = self.model.get_market_state()
         best_offer = None
         best_score = -1
+
         
-        #TODO: deal with key errors here
-        for offer in market_state['offers']:
-            score = self.evaluate_offer(offer['price'], offer['is_renewable'])
-            if score > best_score:
-                best_score = score
-                best_offer = offer
-                
+        # for offer in market_state['offers']:
+        #     score = self.evaluate_offer(offer['price'], offer['is_renewable'])
+        #     if score > best_score:
+        #         best_score = score
+        #         best_offer = offer
+        
+        # Get LLM decision about best offer
+        decision = self.llm_decision_maker.get_consumer_decision({
+            **self.get_state(),
+            'available_offers': market_state['offers']
+        })
+        
+        best_offer = decision.get('best_offer')
+        best_score = decision.get('best_score', -1)
+
         if best_offer and best_score > 0:
             success = self.purchase_energy(
                 best_offer['seller_id'],

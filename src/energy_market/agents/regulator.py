@@ -244,8 +244,19 @@ class RegulatorAgent(EnergyMarketAgent):
             self.renewable_ratio_history = self.renewable_ratio_history[-max_history:]
             self.market_concentration_history = self.market_concentration_history[-max_history:]
             
-        # Adjust carbon tax based on renewable adoption
-        self.adjust_carbon_tax(market_state)
+        # Get current state
+        state = self.get_state()
+        
+        # Get LLM decision about regulatory actions
+        decision = self.llm_decision_maker.get_regulator_decision({
+            **state,
+            'market_state': market_state
+        })
+        
+        # Apply LLM decisions
+        self.current_carbon_tax *= (1 + decision['adjust_carbon_tax'] / 100)
+        self.max_price_increase = decision['max_price_increase']
+        self.min_renewable_ratio = decision['enforce_renewable_quota']
         
         # Enforce regulations and issue fines
         self.enforce_regulations(market_state) 

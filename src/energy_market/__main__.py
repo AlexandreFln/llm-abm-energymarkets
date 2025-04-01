@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 
-from .simulation import EnergyMarketSimulation
+from energy_market.simulation import EnergyMarketSimulation
 
 def parse_args():
     """Parse command line arguments."""
@@ -13,7 +13,7 @@ def parse_args():
     parser.add_argument(
         '--num-steps',
         type=int,
-        default=168,
+        default=10,
         help='Number of simulation steps (default: 168, one week of hourly steps)'
     )
     

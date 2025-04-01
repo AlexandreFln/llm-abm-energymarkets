@@ -171,28 +171,49 @@ class ProsumerAgent(ConsumerAgent):
         self.current_production = self.calculate_production()
         self.pay_maintenance()
         
-        # First satisfy own energy needs
+        # Get current state
+        state = self.get_state()
+        market_state = self.model.get_market_state()
+        
+        # Get LLM decision about energy management strategy
+        decision = self.llm_decision_maker.get_prosumer_decision({
+            **state,
+            'market_state': market_state
+        })
+        
+        # Apply LLM decisions
         energy_needed = self.energy_needs
         
-        # Use stored energy first
-        energy_from_storage = self.use_stored_energy(energy_needed)
+        # Use stored energy based on LLM decision
+        energy_from_storage = min(
+            decision['use_storage'],
+            self.energy_stored
+        )
         energy_needed -= energy_from_storage
+        self.energy_stored -= energy_from_storage
         
         # Use current production
         energy_from_production = min(energy_needed, self.current_production)
         energy_needed -= energy_from_production
         remaining_production = self.current_production - energy_from_production
         
-        # Store any excess production
+        # Store energy based on LLM decision
         if remaining_production > 0:
-            remaining_production = self.store_energy(remaining_production)
+            store_amount = min(
+                decision['store_amount'],
+                remaining_production,
+                self.storage_capacity - self.energy_stored
+            )
+            self.energy_stored += store_amount
+            remaining_production -= store_amount
             
         # If still need energy, buy from market
         if energy_needed > 0:
             super().step()  # Use consumer logic to purchase needed energy
             
-        # Adjust selling price and try to sell excess energy
-        self.adjust_selling_price()
+        # Update selling price based on LLM decision
+        self.selling_price = decision['selling_price']
         
-        # Consider upgrading capacity
-        self.consider_upgrade() 
+        # Consider upgrading capacity based on LLM decision
+        if decision['consider_upgrade']:
+            self.consider_upgrade() 

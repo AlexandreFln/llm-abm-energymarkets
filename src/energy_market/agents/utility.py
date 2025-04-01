@@ -51,6 +51,7 @@ class UtilityAgent(EnergyMarketAgent):
         # Initialize prices based on persona
         self._initialize_pricing_strategy()
         
+    # TODO: use LLM decision making here
     def _initialize_pricing_strategy(self) -> None:
         """Initialize pricing strategy based on persona."""
         market_state = self.model.get_market_state()
@@ -66,7 +67,8 @@ class UtilityAgent(EnergyMarketAgent):
             self.renewable_quota *= 0.8
             
         self.current_selling_price = avg_market_price * (1 + self.min_profit_margin)
-        
+    
+    # TODO: use LLM decision making here
     def evaluate_producer_contract(self, 
                                  producer_id: str,
                                  contract: Dict[str, Any]) -> float:
@@ -281,11 +283,22 @@ class UtilityAgent(EnergyMarketAgent):
         # Update customer information
         self.update_customer_base()
         
+        # Get current state
+        state = self.get_state()
+        market_state = self.model.get_market_state()
+        
+        # Get LLM decision about utility strategy
+        decision = self.llm_decision_maker.get_utility_decision({
+            **state,
+            'market_state': market_state
+        })
+        
+        # Apply LLM decisions
+        self.current_selling_price = decision['selling_price']
+        self.renewable_quota = decision['renewable_target']
+        
         # Manage contracts with producers
         self.manage_producer_contracts()
-        
-        # Calculate new selling price
-        self.current_selling_price = self.calculate_selling_price()
         
         # Reset spot market purchases for new step
         self.spot_market_purchases = 0.0 

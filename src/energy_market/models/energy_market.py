@@ -1,7 +1,7 @@
 from typing import Dict, Any, List, Optional
 import numpy as np
 from mesa import Model
-from mesa.time import RandomActivation
+from mesa.time import RandomActivation, SimultaneousActivation
 from mesa.datacollection import DataCollector
 
 from ..agents.consumer import ConsumerAgent
@@ -45,6 +45,8 @@ class EnergyMarketModel(Model):
         
         # Initialize schedule
         self.schedule = RandomActivation(self)
+        # self.schedule = SimultaneousActivation(self)
+
         
         # Initialize agent storage
         self.market_agents: Dict[str, Dict[str, Any]] = {
@@ -225,7 +227,7 @@ class EnergyMarketModel(Model):
             renewable_production / total_production if total_production > 0 else 0
         )
         
-        # Calculate market concentration (HHI)
+        # Calculate market concentration using Herfindahl-Hirschman Index (HHI)
         total_capacity = sum(
             producer.max_capacity
             for producer in self.market_agents['producers'].values()
@@ -256,7 +258,7 @@ class EnergyMarketModel(Model):
                 'seller_type': 'utility',
                 'price': utility.current_selling_price,
                 'amount': sum(c['amount'] for c in utility.producer_contracts.values()) if hasattr(utility, 'producer_contracts') else 0,
-                'is_renewable': False  # Utilities mix different sources
+                'is_renewable': utility.renewable_quota > 0.5,  # Utilities mix different sources
             })
         
         # Add prosumer offers
@@ -267,7 +269,7 @@ class EnergyMarketModel(Model):
                     'seller_type': 'prosumer',
                     'price': prosumer.selling_price,
                     'amount': prosumer.energy_stored + max(0, prosumer.current_production - prosumer.energy_needs),
-                    'is_renewable': True  # Prosumers typically use renewable sources
+                    'is_renewable': True  # Prosumers use renewable sources
                 })
         
         return {
@@ -303,5 +305,19 @@ class EnergyMarketModel(Model):
         
     def step(self) -> None:
         """Execute one step of the model."""
-        self.schedule.step()
-        self.datacollector.collect(self) 
+        print("\nExecuting model step...")
+        
+        # Update market state
+        market_state = self.get_market_state()
+        print(f"  Market state: Price={market_state['average_price']:.2f}, Supply={market_state['total_supply']:.2f}, Demand={market_state['total_demand']:.2f}")
+        
+        # Execute agent steps in random order
+        print("  Executing agent steps:")
+        for agent in self.schedule.agents:
+            print(f"    - {agent.__class__.__name__} {agent.unique_id}")
+            agent.step()
+        
+        # Collect data
+        print("  Collecting data...")
+        self.datacollector.collect(self)
+        print("  Step complete.\n") 

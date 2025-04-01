@@ -1,6 +1,7 @@
 from mesa import Agent
 import numpy as np
 from typing import Optional, Dict, Any
+from ..utils.llm_decision import LLMDecisionMaker
 
 class EnergyMarketAgent(Agent):
     """Base class for all agents in the energy market."""
@@ -23,6 +24,7 @@ class EnergyMarketAgent(Agent):
         self.resources = initial_resources
         self.profit = 0.0
         self.transaction_history: list[Dict[str, Any]] = []
+        self.llm_decision_maker = LLMDecisionMaker()
         
     def update_resources(self, amount: float) -> None:
         """Update agent's resources by adding/subtracting amount."""

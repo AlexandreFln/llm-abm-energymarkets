@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from typing import Dict, Any, List, Optional
 from pathlib import Path
+import time
 
 from .models.energy_market import EnergyMarketModel
 
@@ -51,10 +52,26 @@ class EnergyMarketSimulation:
             num_steps: Number of steps to run (default: 1 week of hourly steps)
         """
         print(f"\nRunning simulation for {num_steps} steps...")
+        start_time = time.time()
+        
         for step in range(num_steps):
-            print(f"\rStep {step + 1}/{num_steps} ({(step + 1) / num_steps * 100:.1f}%)", end="", flush=True)
+            step_start = time.time()
+            print(f"\nStep {step + 1}/{num_steps} ({(step + 1) / num_steps * 100:.1f}%)")
+            
+            # Execute model step
             self.model.step()
-        print("\nSimulation complete!")
+            
+            # Show step timing
+            step_time = time.time() - step_start
+            total_time = time.time() - start_time
+            avg_step_time = total_time / (step + 1)
+            remaining_steps = num_steps - (step + 1)
+            est_remaining = remaining_steps * avg_step_time
+            
+            print(f"Step time: {step_time:.1f}s, Avg: {avg_step_time:.1f}s, Est. remaining: {est_remaining/60:.1f}m")
+        
+        total_time = time.time() - start_time
+        print(f"\nSimulation complete! Total time: {total_time/60:.1f}m")
             
     def get_model_data(self) -> pd.DataFrame:
         """Get model-level data from simulation.

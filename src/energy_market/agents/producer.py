@@ -105,11 +105,20 @@ class EnergyProducerAgent(EnergyMarketAgent):
         optimal_amount = min(optimal_amount, self.max_capacity)
         
         # Ensure production cost allows for minimum profit margin
-        while optimal_amount > 0:
+        max_iterations = 20  # Maximum number of iterations to prevent infinite loops
+        min_threshold = 0.01  # Minimum production threshold (1% of max capacity)
+        iteration = 0
+        
+        while optimal_amount > min_threshold * self.max_capacity and iteration < max_iterations:
             cost = self.calculate_production_cost(optimal_amount)
             if cost / optimal_amount * (1 + self.min_profit_margin) <= self.current_price:
                 break
             optimal_amount *= 0.9  # Reduce by 10% and try again
+            iteration += 1
+            
+        # If we hit the iteration limit, return the minimum threshold
+        if iteration >= max_iterations:
+            optimal_amount = min_threshold * self.max_capacity
             
         return optimal_amount
         
@@ -123,7 +132,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
         min_price = self.base_production_cost * (1 + self.min_profit_margin)
         
         if not self.is_renewable():
-            min_price += self.model.get_carbon_tax_rate()
+            min_price *= 1 + self.model.get_carbon_tax_rate()
             
         # Adjust price based on market conditions and production costs
         if self.current_production > self.max_capacity * 0.9:
@@ -139,6 +148,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
         # Smooth price changes
         self.current_price = (self.current_price + target_price) / 2
         
+    # TODO: use LLM decision making here
     def negotiate_contract(self, utility_id: str, amount: float, duration: int) -> Dict[str, Any]:
         """Negotiate a contract with a utility.
         
@@ -257,14 +267,26 @@ class EnergyProducerAgent(EnergyMarketAgent):
         # Maintain facility and update efficiency
         self.maintain_facility()
         
-        # Calculate optimal production level
-        self.current_production = self.calculate_optimal_production()
+        # Get current state
+        state = self.get_state()
+        market_state = self.model.get_market_state()
+        
+        # Get LLM decision about production strategy
+        decision = self.llm_decision_maker.get_producer_decision({
+            **state,
+            'market_state': market_state
+        })
+        
+        # Apply LLM decisions
+        self.current_production = min(
+            decision['production_level'],
+            self.max_capacity
+        )
+        self.current_price = decision['price']
         
         # Fulfill existing contracts
         self.fulfill_contracts()
         
-        # Adjust prices based on market conditions
-        self.adjust_price()
-        
-        # Consider upgrading capacity
-        self.consider_upgrade() 
+        # Consider upgrading capacity based on LLM decision
+        if decision['consider_upgrade']:
+            self.consider_upgrade() 
