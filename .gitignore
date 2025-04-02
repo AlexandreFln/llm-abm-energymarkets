@@ -1,4 +1,13 @@
 .DS_Store
+.png
+.csv
+.vscode/
+.venv/
+.env/
+.idea/
+.pytest_cache/
+.ruff_cache/
+.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

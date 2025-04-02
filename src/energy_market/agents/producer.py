@@ -250,8 +250,11 @@ class EnergyProducerAgent(EnergyMarketAgent):
             
     def get_state(self) -> Dict[str, Any]:
         """Get the current state of the producer."""
-        state = super().get_state()
-        state.update({
+        state = {
+            'resources': self.resources,
+            'profit': self.profit,
+            'transaction_history': self.transaction_history[-5:] if self.transaction_history else [],
+            'persona': self.persona,
             'production_type': self.production_type,
             'max_capacity': self.max_capacity,
             'current_production': self.current_production,
@@ -259,7 +262,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
             'production_efficiency': self.production_efficiency,
             'contracts': list(self.utility_contracts.values()),
             'is_renewable': self.is_renewable()
-        })
+        }
         return state
         
     def step(self) -> None:
@@ -279,14 +282,21 @@ class EnergyProducerAgent(EnergyMarketAgent):
         
         # Apply LLM decisions
         self.current_production = min(
-            decision['production_level'],
+            decision.production_level,
             self.max_capacity
         )
-        self.current_price = decision['price']
+        self.current_price = decision.price
+        
+        # Update contract acceptance policy
+        self.accept_contracts = decision.accept_contracts
+        self.min_contract_duration = decision.min_contract_duration
+        
+        # Consider capacity upgrade based on LLM decision
+        if decision.consider_upgrade:
+            self.consider_upgrade()
+            
+        # Maintain facility
+        self.maintain_facility()
         
         # Fulfill existing contracts
-        self.fulfill_contracts()
-        
-        # Consider upgrading capacity based on LLM decision
-        if decision['consider_upgrade']:
-            self.consider_upgrade() 
+        self.fulfill_contracts() 

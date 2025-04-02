@@ -264,8 +264,10 @@ class UtilityAgent(EnergyMarketAgent):
         
     def get_state(self) -> Dict[str, Any]:
         """Get the current state of the utility."""
-        state = super().get_state()
-        state.update({
+        state = {
+            'resources': self.resources,
+            'profit': self.profit,
+            'transaction_history': self.transaction_history[-5:] if self.transaction_history else [],
             'persona': self.persona,
             'renewable_quota': self.renewable_quota,
             'energy_stored': self.energy_stored,
@@ -275,14 +277,11 @@ class UtilityAgent(EnergyMarketAgent):
             'producer_contracts': list(self.producer_contracts.values()),
             'customer_count': len(self.customer_base),
             'spot_market_purchases': self.spot_market_purchases
-        })
+        }
         return state
         
     def step(self) -> None:
         """Execute one step of the utility agent."""
-        # Update customer information
-        self.update_customer_base()
-        
         # Get current state
         state = self.get_state()
         market_state = self.model.get_market_state()
@@ -294,11 +293,36 @@ class UtilityAgent(EnergyMarketAgent):
         })
         
         # Apply LLM decisions
-        self.current_selling_price = decision['selling_price']
-        self.renewable_quota = decision['renewable_target']
+        self.renewable_quota = decision.renewable_target
+        self.current_selling_price = decision.selling_price
         
-        # Manage contracts with producers
+        # Manage storage based on LLM decision
+        if decision.storage_strategy == 'increase':
+            # Buy more energy for storage
+            self.spot_market_purchases = min(
+                self.storage_capacity - self.energy_stored,
+                market_state['available_supply']
+            )
+        elif decision.storage_strategy == 'decrease':
+            # Sell stored energy
+            amount_to_sell = min(
+                self.energy_stored,
+                market_state['available_demand']
+            )
+            if amount_to_sell > 0:
+                self.model.add_energy_offer(
+                    self.unique_id,
+                    amount_to_sell,
+                    self.current_selling_price,
+                    False  # Not renewable
+                )
+                self.energy_stored -= amount_to_sell
+                
+        # Manage producer contracts
         self.manage_producer_contracts()
+        
+        # Update customer base
+        self.update_customer_base()
         
         # Reset spot market purchases for new step
         self.spot_market_purchases = 0.0 

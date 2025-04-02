@@ -152,8 +152,10 @@ class ProsumerAgent(ConsumerAgent):
         
     def get_state(self) -> Dict[str, Any]:
         """Get the current state of the prosumer."""
-        state = super().get_state()
-        state.update({
+        state = {
+            'resources': self.resources,
+            'profit': self.profit,
+            'transaction_history': self.transaction_history[-5:] if self.transaction_history else [],
             'production_type': self.production_type,
             'max_production_capacity': self.max_production_capacity,
             'current_production': self.current_production,
@@ -161,7 +163,7 @@ class ProsumerAgent(ConsumerAgent):
             'storage_capacity': self.storage_capacity,
             'selling_price': self.selling_price,
             'connected_to_grid': self.connected_to_grid
-        })
+        }
         return state
     
     #TODO: use LLM decision making here for mix strategy between selling to local grid, storing energy, or buying from market
@@ -186,7 +188,7 @@ class ProsumerAgent(ConsumerAgent):
         
         # Use stored energy based on LLM decision
         energy_from_storage = min(
-            decision['use_storage'],
+            decision.use_storage,
             self.energy_stored
         )
         energy_needed -= energy_from_storage
@@ -199,21 +201,24 @@ class ProsumerAgent(ConsumerAgent):
         
         # Store energy based on LLM decision
         if remaining_production > 0:
-            store_amount = min(
-                decision['store_amount'],
+            amount_to_store = min(
+                decision.store_amount,
                 remaining_production,
                 self.storage_capacity - self.energy_stored
             )
-            self.energy_stored += store_amount
-            remaining_production -= store_amount
+            self.energy_stored += amount_to_store
+            remaining_production -= amount_to_store
             
-        # If still need energy, buy from market
-        if energy_needed > 0:
-            super().step()  # Use consumer logic to purchase needed energy
+        # Sell remaining production based on LLM decision
+        if remaining_production > 0:
+            self.selling_price = decision.selling_price
+            self.model.add_energy_offer(
+                self.unique_id,
+                remaining_production,
+                self.selling_price,
+                True  # Always renewable
+            )
             
-        # Update selling price based on LLM decision
-        self.selling_price = decision['selling_price']
-        
-        # Consider upgrading capacity based on LLM decision
-        if decision['consider_upgrade']:
+        # Consider capacity upgrade based on LLM decision
+        if decision.consider_upgrade:
             self.consider_upgrade() 

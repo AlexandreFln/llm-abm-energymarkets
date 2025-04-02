@@ -13,35 +13,35 @@ def parse_args():
     parser.add_argument(
         '--num-steps',
         type=int,
-        default=10,
+        default=3,
         help='Number of simulation steps (default: 168, one week of hourly steps)'
     )
     
     parser.add_argument(
         '--num-consumers',
         type=int,
-        default=100,
+        default=2,
         help='Number of consumer agents (default: 100)'
     )
     
     parser.add_argument(
         '--num-prosumers',
         type=int,
-        default=20,
+        default=1,
         help='Number of prosumer agents (default: 20)'
     )
     
     parser.add_argument(
         '--num-producers',
         type=int,
-        default=10,
+        default=2,
         help='Number of producer agents (default: 10)'
     )
     
     parser.add_argument(
         '--num-utilities',
         type=int,
-        default=5,
+        default=2,
         help='Number of utility agents (default: 5)'
     )
     
@@ -82,7 +82,7 @@ def main():
     # Create output directory with timestamp if not specified
     if args.output_dir is None:
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        output_dir = Path.cwd() / f'results_{timestamp}'
+        output_dir = Path.cwd() / f'results/results_{timestamp}'
     else:
         output_dir = Path(args.output_dir)
         
@@ -131,4 +131,4 @@ def main():
 
 if __name__ == '__main__':
     import sys
-    sys.exit(main()) 
+    sys.exit(main())

@@ -214,15 +214,14 @@ class RegulatorAgent(EnergyMarketAgent):
                     
     def get_state(self) -> Dict[str, Any]:
         """Get the current state of the regulator."""
-        state = super().get_state()
-        state.update({
+        state = {
             'current_carbon_tax': self.current_carbon_tax,
             'min_renewable_ratio': self.min_renewable_ratio,
             'market_concentration_threshold': self.market_concentration_threshold,
             'recent_violations': {
                 k: v[-5:] for k, v in self.violations.items()  # Last 5 violations of each type
             }
-        })
+        }
         return state
         
     def step(self) -> None:
@@ -254,9 +253,41 @@ class RegulatorAgent(EnergyMarketAgent):
         })
         
         # Apply LLM decisions
-        self.current_carbon_tax *= (1 + decision['adjust_carbon_tax'] / 100)
-        self.max_price_increase = decision['max_price_increase']
-        self.min_renewable_ratio = decision['enforce_renewable_quota']
+        # Adjust carbon tax
+        self.current_carbon_tax *= (1 + decision.adjust_carbon_tax / 100)
         
-        # Enforce regulations and issue fines
+        # Handle price intervention
+        if decision.price_intervention:
+            self.max_price_increase = decision.max_price_increase
+            
+        # Update renewable quota enforcement
+        self.min_renewable_ratio = decision.enforce_renewable_quota
+        
+        # Issue warnings based on LLM decision
+        for warning_type in decision.issue_warnings:
+            if warning_type == 'price_gouging':
+                violations = self.detect_price_gouging(market_state)
+                for violation in violations:
+                    self.violations['price_gouging'].append({
+                        'time': self.model.schedule.time,
+                        'agent_id': violation['agent_id'],
+                        'type': 'warning'
+                    })
+            elif warning_type == 'market_concentration':
+                concentration = self.calculate_market_concentration(market_state)
+                if concentration > self.market_concentration_threshold:
+                    self.violations['market_concentration'].append({
+                        'time': self.model.schedule.time,
+                        'concentration': concentration,
+                        'type': 'warning'
+                    })
+            elif warning_type == 'renewable_quota':
+                if market_state['renewable_ratio'] < self.min_renewable_ratio:
+                    self.violations['renewable_quota'].append({
+                        'time': self.model.schedule.time,
+                        'ratio': market_state['renewable_ratio'],
+                        'type': 'warning'
+                    })
+                    
+        # Enforce regulations
         self.enforce_regulations(market_state) 
