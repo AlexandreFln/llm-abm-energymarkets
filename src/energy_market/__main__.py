@@ -3,6 +3,7 @@ from pathlib import Path
 from datetime import datetime
 
 from energy_market.simulation import EnergyMarketSimulation
+from energy_market.logging_system import SimulationLogger
 
 def parse_args():
     """Parse command line arguments."""
@@ -85,7 +86,10 @@ def main():
         output_dir = Path.cwd() / f'results/results_{timestamp}'
     else:
         output_dir = Path(args.output_dir)
-        
+    
+    # Ensure output directory exists
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
     print("\nInitializing energy market simulation...")
     print(f"Configuration:")
     print(f"  - Number of steps: {args.num_steps}")
@@ -109,8 +113,12 @@ def main():
             output_dir=str(output_dir)
         )
         
+        # Initialize logger with the output directory
+        logger = SimulationLogger(base_dir=str(output_dir))
+        logger.start_new_run()
+        
         print("\nStarting simulation...")
-        simulation.run_and_analyze(args.num_steps)
+        simulation.run_and_analyze(args.num_steps, logger)
         print("\nSimulation completed successfully!")
         
     except KeyboardInterrupt:

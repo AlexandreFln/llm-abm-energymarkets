@@ -301,13 +301,13 @@ class UtilityAgent(EnergyMarketAgent):
             # Buy more energy for storage
             self.spot_market_purchases = min(
                 self.storage_capacity - self.energy_stored,
-                market_state['available_supply']
+                market_state['total_supply']
             )
         elif decision.storage_strategy == 'decrease':
             # Sell stored energy
             amount_to_sell = min(
                 self.energy_stored,
-                market_state['available_demand']
+                market_state['total_demand']
             )
             if amount_to_sell > 0:
                 self.model.add_energy_offer(
