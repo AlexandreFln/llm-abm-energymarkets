@@ -1,17 +1,18 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List
 import json
 import time
+import asyncio
 from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain.output_parsers import PydanticOutputParser
-from ..prompts.system_prompts import (
+from src.energy_market.prompts.system_prompts import (
     CONSUMER_PROMPT,
     PROSUMER_PROMPT,
     PRODUCER_PROMPT,
     UTILITY_PROMPT,
     REGULATOR_PROMPT
 )
-from ..schemas.llm_decisions import (
+from src.energy_market.schemas.llm_decisions import (
     ConsumerDecision,
     ProsumerDecision,
     ProducerDecision,
@@ -44,6 +45,9 @@ class LLMDecisionMaker:
         self.utility_parser = PydanticOutputParser(pydantic_object=UtilityDecision)
         self.regulator_parser = PydanticOutputParser(pydantic_object=RegulatorDecision)
         
+        # Create a semaphore to limit concurrent LLM calls
+        self.semaphore = asyncio.Semaphore(10)  # Limit to 10 concurrent calls
+        
     def _format_state_for_prompt(self, state: Dict[str, Any]) -> str:
         """Format agent state for prompt.
         
@@ -65,9 +69,9 @@ class LLMDecisionMaker:
                 
         return json.dumps(formatted_state, indent=2)
         
-    def _safe_llm_call(self, prompt: str, default_response: Dict[str, Any], 
-                      agent_type: str = None) -> Dict[str, Any]:
-        """Make an LLM call with error handling and timeout.
+    async def _safe_llm_call_async(self, prompt: str, default_response: Dict[str, Any], 
+                                  agent_type: str = None) -> Dict[str, Any]:
+        """Make an asynchronous LLM call with error handling and timeout.
         
         Args:
             prompt: The prompt to send to the LLM
@@ -77,7 +81,7 @@ class LLMDecisionMaker:
         Returns:
             Dict containing the decision
         """
-        print("      Making LLM call...")
+        print(f"      Making LLM call for {agent_type}...")
         start_time = time.time()
         
         # Get appropriate system prompt and parser based on agent type
@@ -108,27 +112,34 @@ class LLMDecisionMaker:
             HumanMessage(content=prompt)
         ]
         
-        try:
-            response = self.llm.invoke(full_prompt)
-            print(f"      LLM call completed in {time.time() - start_time:.2f}s")
-            
-            # Parse the response
+        # Use semaphore to limit concurrent calls
+        async with self.semaphore:
             try:
-                decision = parser.parse(response.content)
-                return decision
-            except Exception as e:
-                print(f"      Failed to validate LLM response: {str(e)}")
-                print(f"      Raw response: {response.content}")
-                print("      Using default response")
-                return default_response
+                # Run LLM call in a thread pool to avoid blocking
+                response = await asyncio.to_thread(self.llm.invoke, full_prompt)
+                print(f"      LLM call for {agent_type} completed in {time.time() - start_time:.2f}s")
                 
-        except Exception as e:
-            print(f"      LLM call failed after {time.time() - start_time:.2f}s: {str(e)}")
-            print("      Using default response")
-            return default_response
+                # Parse the response
+                try:
+                    decision = parser.parse(response.content)
+                    return decision
+                except Exception as e:
+                    print(f"      Failed to validate LLM response for {agent_type}: {str(e)}")
+                    print(f"      Raw response: {response.content}")
+                    print(f"      Using default response: {default_response}")
+                    return default_response
+                    
+            except Exception as e:
+                print(f"      LLM call for {agent_type} failed after {time.time() - start_time:.2f}s: {str(e)}")
+                print(f"      Using default response: {default_response}")
+                return default_response
+    
         
-    def get_consumer_decision(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Get consumer decision about energy purchases.
+    async def get_consumer_decision_async(self,
+                                          state: Dict[str, Any],
+                                          available_offers: List[Dict[str, Any]],
+                                          ) -> Dict[str, Any]:
+        """Get consumer decision about energy purchases asynchronously.
         
         Args:
             state: Current state of the consumer agent
@@ -156,11 +167,14 @@ Example response:
     "best_offer": {{"seller_id": "utility1", "amount": 100.0, "price": 120.0, "is_renewable": true}},
     "best_score": 85
 }}
+
+Available offers:
+{available_offers}
 """
-        return self._safe_llm_call(prompt, default_response, "consumer")
+        return await self._safe_llm_call_async(prompt, default_response, "consumer")
         
-    def get_prosumer_decision(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Get prosumer decision about energy production and sales.
+    async def get_prosumer_decision_async(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Get prosumer decision about energy production and sales asynchronously.
         
         Args:
             state: Current state of the prosumer agent
@@ -204,10 +218,10 @@ Example response:
     "consider_upgrade": false
 }}
 """
-        return self._safe_llm_call(prompt, default_response, "prosumer")
+        return await self._safe_llm_call_async(prompt, default_response, "prosumer")
         
-    def get_producer_decision(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Get producer decision about energy production and pricing.
+    async def get_producer_decision_async(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Get producer decision about energy production and pricing asynchronously.
         
         Args:
             state: Current state of the producer agent
@@ -251,10 +265,10 @@ Example response:
     "consider_upgrade": true
 }}
 """
-        return self._safe_llm_call(prompt, default_response, "producer")
+        return await self._safe_llm_call_async(prompt, default_response, "producer")
         
-    def get_utility_decision(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Get utility decision about energy procurement and pricing.
+    async def get_utility_decision_async(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Get utility decision about energy procurement and pricing asynchronously.
         
         Args:
             state: Current state of the utility agent
@@ -298,10 +312,10 @@ Example response:
     "storage_strategy": "increase"
 }}
 """
-        return self._safe_llm_call(prompt, default_response, "utility")
+        return await self._safe_llm_call_async(prompt, default_response, "utility")
         
-    def get_regulator_decision(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Get regulator decision about market intervention.
+    async def get_regulator_decision_async(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Get regulator decision about market intervention asynchronously.
         
         Args:
             state: Current state of the regulator agent
@@ -345,4 +359,4 @@ Example response:
     "issue_warnings": ["price_gouging", "market_concentration"]
 }}
 """
-        return self._safe_llm_call(prompt, default_response, "regulator") 
+        return await self._safe_llm_call_async(prompt, default_response, "regulator") 

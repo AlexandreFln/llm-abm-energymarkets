@@ -1,20 +1,18 @@
-from typing import Dict, Any, Optional
-import numpy as np
-
+from typing import Dict, Any
 from .base import EnergyMarketAgent
+from src.energy_market.utils.llm_decision import LLMDecisionMaker
 
 class ConsumerAgent(EnergyMarketAgent):
-    """Consumer agent that purchases energy from utilities or prosumers."""
-    #TODO: remove price tolerance ?
-    def __init__(self,
-                 unique_id: str,
-                 model: Any,
+    """Agent representing an energy consumer in the market."""
+    
+    def __init__(self, 
+                 unique_id: str, 
+                 model: Any, 
                  persona: str,
-                 initial_resources: float = 1000.0,
-                 energy_needs: float = 100.0,
-                 max_price_tolerance: float = 150.0,
-                 min_price_tolerance: float = 50.0,
-                 green_energy_preference: float = 0.5):
+                 initial_resources: float,
+                 energy_needs: float,
+                 price_sensitivity: float = 0.5,
+                 renewable_preference: float = 0.3):
         """Initialize consumer agent.
         
         Args:
@@ -22,94 +20,97 @@ class ConsumerAgent(EnergyMarketAgent):
             model: The model instance the agent belongs to
             persona: The agent's personality/behavior type
             initial_resources: Starting monetary resources
-            energy_needs: Amount of energy needed per step
-            max_price_tolerance: Maximum price willing to pay per unit
-            min_price_tolerance: Minimum price considered suspicious/too good to be true
-            green_energy_preference: Preference for renewable energy (0-1)
+            energy_needs: Base energy consumption needs
+            price_sensitivity: How sensitive the agent is to price changes (0-1)
+            renewable_preference: Preference for renewable energy (0-1)
         """
         super().__init__(unique_id, model, persona, initial_resources)
         self.energy_needs = energy_needs
-        self.max_price_tolerance = max_price_tolerance
-        self.min_price_tolerance = min_price_tolerance
-        self.green_energy_preference = green_energy_preference
-        self.current_utility: Optional[str] = None
-        self.energy_balance = 0.0
-    
-    #TODO: replace with LLM decision
-    def evaluate_offer(self, price: float, is_renewable: bool) -> float:
-        """Evaluate an energy offer based on price and source.
+        self.price_sensitivity = price_sensitivity
+        self.renewable_preference = renewable_preference
+        self.current_consumption = 0.0
+        self.energy_price = 0.0
         
-        Args:
-            price: Offered price per unit
-            is_renewable: Whether the energy is from renewable sources
-            
+        
+    def _get_state(self) -> Dict[str, Any]:
+        """Get current state of the agent for decision making.
+        
         Returns:
-            float: Score for the offer (higher is better)
+            Dict containing agent state
         """
-        if price > self.max_price_tolerance or price < self.min_price_tolerance:
-            return 0.0
-            
-        price_score = 1.0 - (price / self.max_price_tolerance)
-        renewable_score = self.green_energy_preference if is_renewable else 0.0
-        
-        return 0.7 * price_score + 0.3 * renewable_score
-        
-    def purchase_energy(self, seller_id: str, amount: float, price: float) -> bool:
-        """Attempt to purchase energy from a seller.
-        
-        Args:
-            seller_id: ID of the selling agent
-            amount: Amount of energy to purchase
-            price: Price per unit
-            
-        Returns:
-            bool: Whether the purchase was successful
-        """
-        total_cost = amount * price
-        if total_cost > self.resources:
-            return False
-            
-        self.update_resources(-total_cost)
-        self.energy_balance += amount
-        self.record_transaction('buy', amount, price, seller_id)
-        return True
-        
-    def get_state(self) -> Dict[str, Any]:
-        """Get the current state of the consumer for decision making."""
         return {
+            'id': self.unique_id,
+            'persona': self.persona,
             'resources': self.resources,
             'energy_needs': self.energy_needs,
-            'energy_balance': self.energy_balance,
-            'max_price_tolerance': self.max_price_tolerance,
-            'green_preference': self.green_energy_preference,
-            'current_utility': self.current_utility,
-            'transaction_history': self.transaction_history[-5:] if self.transaction_history else []
+            'current_consumption': self.current_consumption,
+            'energy_price': self.energy_price,
+            'price_sensitivity': self.price_sensitivity,
+            'renewable_preference': self.renewable_preference,
+            'transaction_history': self.transaction_history[-5:] if self.transaction_history else [],
+            'market_time': self.model.schedule.time,
         }
         
-    def step(self) -> None:
-        """Execute one step of the consumer agent."""
-        # Reset energy balance for new step
-        self.energy_balance = 0.0
+    def _execute_decision(self, decision: Dict[str, Any]) -> None:
+        """Execute the agent's decision.
         
-        # Get available offers from utilities and prosumers
-        market_state = self.model.get_market_state()
-        best_offer = None
-        best_score = -1
+        Args:
+            decision: The decision made by the agent
+        """
+        if not decision or 'best_offer' not in decision or not decision['best_offer']:
+            return
+            
+        best_offer = decision['best_offer']
+        seller_id = best_offer.get('seller_id')
+        amount = best_offer.get('amount', 0)
+        price = best_offer.get('price', 0)
         
-        # Get LLM decision about best offer
-        decision = self.llm_decision_maker.get_consumer_decision({
-            **self.get_state(),
-            'available_offers': market_state['offers']
-        })
+        if not seller_id or amount <= 0 or price <= 0:
+            return
+            
+        # Calculate total cost
+        total_cost = amount * price
         
-        best_offer = decision.best_offer
-        best_score = decision.best_score
-
-        if best_offer and best_score > 0:
-            success = self.purchase_energy(
-                best_offer.seller_id,
-                min(self.energy_needs, best_offer.amount),
-                best_offer.price
+        # Check if agent has enough resources
+        if total_cost > self.resources:
+            # Adjust amount to what agent can afford
+            amount = self.resources / price
+            total_cost = amount * price
+            
+        # Execute transaction
+        if amount > 0:
+            self.model.execute_transaction(
+                buyer_id=self.unique_id,
+                seller_id=seller_id,
+                amount=amount,
+                price=price
             )
-            if success:
-                self.current_utility = best_offer.seller_id 
+            
+            # Update agent state
+            self.update_resources(-total_cost)
+            self.current_consumption = amount
+            self.energy_price = price
+            
+            # Record transaction
+            self.record_transaction(
+                transaction_type='buy',
+                amount=amount,
+                price=price,
+                counterparty_id=seller_id
+            ) 
+            
+    async def step_async(self) -> None:
+        """Execute one step of the consumer agent's behavior asynchronously."""
+        # Get available offers from the market
+        available_offers = self.model.get_available_offers()
+        
+        # Get agent's state for decision making
+        state = self._get_state()
+        
+        # Make decision using LLM asynchronously
+        decision = await self.llm_decision_maker.get_consumer_decision_async(
+            state, available_offers
+        )
+        
+        # Execute decision
+        self._execute_decision(decision)

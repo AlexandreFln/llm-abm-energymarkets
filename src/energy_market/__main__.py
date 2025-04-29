@@ -1,9 +1,10 @@
 import argparse
 from pathlib import Path
 from datetime import datetime
+import asyncio
 
-from energy_market.simulation import EnergyMarketSimulation
-from energy_market.logging_system import SimulationLogger
+from simulation import EnergyMarketSimulation
+from src.energy_market.logging_system import SimulationLogger
 
 def parse_args():
     """Parse command line arguments."""
@@ -21,21 +22,21 @@ def parse_args():
     parser.add_argument(
         '--num-consumers',
         type=int,
-        default=2,
+        default=5,
         help='Number of consumer agents (default: 100)'
     )
     
     parser.add_argument(
         '--num-prosumers',
         type=int,
-        default=1,
+        default=2,
         help='Number of prosumer agents (default: 20)'
     )
     
     parser.add_argument(
         '--num-producers',
         type=int,
-        default=2,
+        default=3,
         help='Number of producer agents (default: 10)'
     )
     
@@ -118,7 +119,7 @@ def main():
         logger.start_new_run()
         
         print("\nStarting simulation...")
-        simulation.run_and_analyze(args.num_steps, logger)
+        asyncio.run(simulation.run_and_analyze(args.num_steps, logger))
         print("\nSimulation completed successfully!")
         
     except KeyboardInterrupt:

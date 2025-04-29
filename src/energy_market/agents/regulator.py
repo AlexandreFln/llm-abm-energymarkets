@@ -54,9 +54,12 @@ class RegulatorAgent(EnergyMarketAgent):
             
         Returns:
             float: HHI value between 0 and 1
-        """
-        total_capacity = market_state['total_capacity']
+        """        
+        total_capacity = market_state.get('total_capacity', 0)
         if total_capacity == 0:
+            return 0.0
+            
+        if 'producers' not in market_state:
             return 0.0
             
         # Calculate market shares and HHI
@@ -224,7 +227,7 @@ class RegulatorAgent(EnergyMarketAgent):
         }
         return state
         
-    def step(self) -> None:
+    async def step_async(self) -> None:
         """Execute one step of the regulator agent."""
         # Get current market state
         market_state = self.model.get_market_state()
@@ -247,7 +250,7 @@ class RegulatorAgent(EnergyMarketAgent):
         state = self.get_state()
         
         # Get LLM decision about regulatory actions
-        decision = self.llm_decision_maker.get_regulator_decision({
+        decision = await self.llm_decision_maker.get_regulator_decision_async({
             **state,
             'market_state': market_state
         })

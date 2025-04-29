@@ -1,6 +1,25 @@
 # LLM-Powered Energy Market Simulation
 
-This project implements an Agent-Based Model (ABM) of an energy market with LLM-powered decision-making agents. The simulation models interactions between consumers, prosumers, energy producers, utilities, and a market regulator to study market dynamics, renewable energy adoption, and policy impacts.
+The global transition to sustainable energy systems is one of the most pressing challenges of our time. As renewable energy sources proliferate and new market mechanisms emerge, understanding the complex interactions between market participants, regulatory policies, and technological innovation becomes increasingly vital. Traditional modeling approaches often fall short in capturing the nuanced, adaptive, and strategic behaviors of real-world actors in energy markets.
+**This project aims to bridge that gap by combining Agent-Based Modeling (ABM) with the power of Large Language Models (LLMs) to simulate a dynamic, realistic, and richly interactive energy market.**
+
+## What is this simulation?
+This simulation is a research and experimentation platform designed to model the behavior of diverse agents—consumers, prosumers, energy producers, utilities, and regulators—within a competitive energy market. Each agent is endowed with LLM-powered decision-making capabilities, enabling them to reason, negotiate, and adapt their strategies in response to evolving market conditions, policy changes, and the actions of other agents.
+
+## Why LLM-powered agents?
+By leveraging LLMs, agents in this simulation can:
+- Interpret complex market signals and historical data
+- Formulate and adapt strategies in natural language
+- Respond to incentives, regulations, and market shocks in a human-like manner
+- Engage in negotiation, contract formation, and policy compliance with greater realism
+This approach allows for the exploration of emergent phenomena that arise from the interplay of intelligent, adaptive agents—phenomena that are difficult to predict or analyze using purely rule-based or equation-driven models
+
+## What can you do with this simulation?
+- **Test Policy Scenarios**: Evaluate the impact of carbon taxes, renewable incentives, and regulatory interventions on market outcomes.
+- **Study Market Dynamics**: Observe how prices, supply-demand balance, renewable adoption, and market concentration evolve over time.
+- **Analyze Agent Behavior**: Investigate how different agent types strategize, cooperate, or compete under various market conditions.
+- **Generate Insights**: Produce detailed analytics and visualizations to inform research, policy design, or educational purposes.
+
 
 ## Features
 
@@ -10,15 +29,16 @@ This project implements an Agent-Based Model (ABM) of an energy market with LLM-
   - **Energy Producers**: Generate and sell energy to utilities
   - **Utilities**: Buy from producers and sell to consumers
   - **Regulator**: Oversees market dynamics and implements policies
-
+<br>
 - LLM-powered decision making for all agents
+<br>
 - Market mechanisms:
   - Dynamic pricing based on supply and demand
   - Contract-based energy trading
   - Renewable energy incentives
   - Carbon taxation
   - Market concentration monitoring
-
+<br>
 - Comprehensive analytics and visualization:
   - Price trends
   - Supply-demand balance
