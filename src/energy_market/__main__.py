@@ -3,6 +3,7 @@ from pathlib import Path
 from datetime import datetime
 
 from energy_market.simulation import EnergyMarketSimulation
+from energy_market.logging_system import SimulationLogger
 
 def parse_args():
     """Parse command line arguments."""
@@ -13,35 +14,35 @@ def parse_args():
     parser.add_argument(
         '--num-steps',
         type=int,
-        default=10,
+        default=3,
         help='Number of simulation steps (default: 168, one week of hourly steps)'
     )
     
     parser.add_argument(
         '--num-consumers',
         type=int,
-        default=100,
+        default=2,
         help='Number of consumer agents (default: 100)'
     )
     
     parser.add_argument(
         '--num-prosumers',
         type=int,
-        default=20,
+        default=1,
         help='Number of prosumer agents (default: 20)'
     )
     
     parser.add_argument(
         '--num-producers',
         type=int,
-        default=10,
+        default=2,
         help='Number of producer agents (default: 10)'
     )
     
     parser.add_argument(
         '--num-utilities',
         type=int,
-        default=5,
+        default=2,
         help='Number of utility agents (default: 5)'
     )
     
@@ -82,10 +83,13 @@ def main():
     # Create output directory with timestamp if not specified
     if args.output_dir is None:
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        output_dir = Path.cwd() / f'results_{timestamp}'
+        output_dir = Path.cwd() / f'results/results_{timestamp}'
     else:
         output_dir = Path(args.output_dir)
-        
+    
+    # Ensure output directory exists
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
     print("\nInitializing energy market simulation...")
     print(f"Configuration:")
     print(f"  - Number of steps: {args.num_steps}")
@@ -109,8 +113,12 @@ def main():
             output_dir=str(output_dir)
         )
         
+        # Initialize logger with the output directory
+        logger = SimulationLogger(base_dir=str(output_dir))
+        logger.start_new_run()
+        
         print("\nStarting simulation...")
-        simulation.run_and_analyze(args.num_steps)
+        simulation.run_and_analyze(args.num_steps, logger)
         print("\nSimulation completed successfully!")
         
     except KeyboardInterrupt:
@@ -131,4 +139,4 @@ def main():
 
 if __name__ == '__main__':
     import sys
-    sys.exit(main()) 
+    sys.exit(main())

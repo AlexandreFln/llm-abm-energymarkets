@@ -1,8 +1,9 @@
 from typing import Dict, Any, Optional
 import json
 import time
-from langchain_ollama import OllamaLLM
+from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain.output_parsers import PydanticOutputParser
 from ..prompts.system_prompts import (
     CONSUMER_PROMPT,
     PROSUMER_PROMPT,
@@ -10,23 +11,38 @@ from ..prompts.system_prompts import (
     UTILITY_PROMPT,
     REGULATOR_PROMPT
 )
+from ..schemas.llm_decisions import (
+    ConsumerDecision,
+    ProsumerDecision,
+    ProducerDecision,
+    UtilityDecision,
+    RegulatorDecision
+)
 
 class LLMDecisionMaker:
     """Class for making agent decisions using LLMs."""
     
     def __init__(self, 
-                 model_name: str = "llama3.2:3b-instruct-fp16",
-                 timeout: float = 5.0):
+                 model_name: str = "llama3.2",
+                 timeout: float = 5.0,
+                 ):
         """Initialize LLM decision maker.
         
         Args:
             model_name: Name of the Ollama model to use
             timeout: Timeout in seconds for LLM calls
         """
-        self.llm = OllamaLLM(
+        self.llm = ChatOllama(
             model=model_name,
-            timeout=timeout
+            # timeout=timeout,
         )
+        
+        # Initialize output parsers for each agent type
+        self.consumer_parser = PydanticOutputParser(pydantic_object=ConsumerDecision)
+        self.prosumer_parser = PydanticOutputParser(pydantic_object=ProsumerDecision)
+        self.producer_parser = PydanticOutputParser(pydantic_object=ProducerDecision)
+        self.utility_parser = PydanticOutputParser(pydantic_object=UtilityDecision)
+        self.regulator_parser = PydanticOutputParser(pydantic_object=RegulatorDecision)
         
     def _format_state_for_prompt(self, state: Dict[str, Any]) -> str:
         """Format agent state for prompt.
@@ -64,18 +80,27 @@ class LLMDecisionMaker:
         print("      Making LLM call...")
         start_time = time.time()
         
-        # Get appropriate system prompt based on agent type
+        # Get appropriate system prompt and parser based on agent type
         system_prompt = ""
+        parser = None
         if agent_type == "consumer":
             system_prompt = CONSUMER_PROMPT
+            parser = self.consumer_parser
         elif agent_type == "prosumer":
             system_prompt = PROSUMER_PROMPT
+            parser = self.prosumer_parser
         elif agent_type == "producer":
             system_prompt = PRODUCER_PROMPT
+            parser = self.producer_parser
         elif agent_type == "utility":
             system_prompt = UTILITY_PROMPT
+            parser = self.utility_parser
         elif agent_type == "regulator":
             system_prompt = REGULATOR_PROMPT
+            parser = self.regulator_parser
+            
+        # Add format instructions to system prompt
+        system_prompt += f"\n\n{parser.get_format_instructions()}"
             
         # Combine system prompt with task prompt
         full_prompt = [
@@ -85,20 +110,20 @@ class LLMDecisionMaker:
         
         try:
             response = self.llm.invoke(full_prompt)
+            print(f"      LLM call completed in {time.time() - start_time:.2f}s")
+            
+            # Parse the response
             try:
-                decision = json.loads(response)
-                elapsed = time.time() - start_time
-                print(f"      LLM call successful ({elapsed:.2f}s)")
+                decision = parser.parse(response.content)
                 return decision
-            except json.JSONDecodeError as e:
-                print(f"      Failed to parse LLM response: {e}")
-                print(f"      Raw response: {response}")
+            except Exception as e:
+                print(f"      Failed to validate LLM response: {str(e)}")
+                print(f"      Raw response: {response.content}")
                 print("      Using default response")
                 return default_response
-            
+                
         except Exception as e:
-            elapsed = time.time() - start_time
-            print(f"      LLM call failed after {elapsed:.2f}s: {e}")
+            print(f"      LLM call failed after {time.time() - start_time:.2f}s: {str(e)}")
             print("      Using default response")
             return default_response
         
@@ -111,10 +136,10 @@ class LLMDecisionMaker:
         Returns:
             Dict containing decision details
         """
-        default_response = {
-            "best_offer": None,
-            "best_score": -1
-        }
+        default_response = ConsumerDecision(
+            best_offer=None,
+            best_score=-1
+        )
         
         prompt = f"""Given your current state:
 
@@ -123,7 +148,7 @@ class LLMDecisionMaker:
 Among all available offers, choose the best offer and score it on a scale of 0 to 100.
 
 Respond with a JSON object containing:
-- "best_offer": The best offer
+- "best_offer": The best offer (with seller_id, amount, price, is_renewable)
 - "best_score": The score of the best offer
 
 Example response:
@@ -143,13 +168,13 @@ Example response:
         Returns:
             Dict containing decision details
         """
-        default_response = {
-            "sell_amount": 0.0,
-            "selling_price": state.get("selling_price", 100),
-            "use_storage": 0.0,
-            "store_amount": state.get("current_production", 0),
-            "consider_upgrade": False
-        }
+        default_response = ProsumerDecision(
+            sell_amount=0.0,
+            selling_price=state.get("selling_price", 100),
+            use_storage=0.0,
+            store_amount=state.get("current_production", 0),
+            consider_upgrade=False
+        )
         
         prompt = f"""Given your current state:
 
@@ -190,13 +215,13 @@ Example response:
         Returns:
             Dict containing decision details
         """
-        default_response = {
-            "production_level": state.get("max_capacity", 0) * 0.8,
-            "price": state.get("current_price", 100),
-            "accept_contracts": True,
-            "min_contract_duration": 30,
-            "consider_upgrade": False
-        }
+        default_response = ProducerDecision(
+            production_level=state.get("max_capacity", 0) * 0.8,
+            price=state.get("current_price", 100),
+            accept_contracts=True,
+            min_contract_duration=30,
+            consider_upgrade=False
+        )
         
         prompt = f"""Given your current state:
 
@@ -237,13 +262,13 @@ Example response:
         Returns:
             Dict containing decision details
         """
-        default_response = {
-            "target_contracts": 1,
-            "max_purchase_price": state.get("current_buying_price", 80),
-            "selling_price": state.get("current_selling_price", 100),
-            "renewable_target": state.get("renewable_quota", 0.2),
-            "storage_strategy": "maintain"
-        }
+        default_response = UtilityDecision(
+            target_contracts=1,
+            max_purchase_price=state.get("current_buying_price", 80),
+            selling_price=state.get("current_selling_price", 100),
+            renewable_target=state.get("renewable_quota", 0.2),
+            storage_strategy="maintain"
+        )
         
         prompt = f"""Given your current state:
 
@@ -284,13 +309,13 @@ Example response:
         Returns:
             Dict containing decision details
         """
-        default_response = {
-            "adjust_carbon_tax": 0.0,
-            "price_intervention": False,
-            "max_price_increase": state.get("max_price_increase", 0.2),
-            "enforce_renewable_quota": True,
-            "issue_warnings": []
-        }
+        default_response = RegulatorDecision(
+            adjust_carbon_tax=0.0,
+            price_intervention=False,
+            max_price_increase=state.get("max_price_increase", 0.2),
+            enforce_renewable_quota=True,
+            issue_warnings=[]
+        )
         
         prompt = f"""Given your current state:
 
