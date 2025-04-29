@@ -3,10 +3,10 @@ import json
 from datetime import datetime
 from typing import Dict, Any, List
 import numpy as np
-from agents.consumer import ConsumerAgent
-from agents.prosumer import ProsumerAgent
-from agents.producer import EnergyProducerAgent
-from agents.utility import UtilityAgent
+from src.energy_market.agents.consumer import ConsumerAgent
+from src.energy_market.agents.prosumer import ProsumerAgent
+from src.energy_market.agents.producer import EnergyProducerAgent
+from src.energy_market.agents.utility import UtilityAgent
 
 
 class SimulationLogger:

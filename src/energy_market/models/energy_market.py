@@ -3,12 +3,13 @@ import numpy as np
 from mesa import Model
 from mesa.time import RandomActivation, SimultaneousActivation
 from mesa.datacollection import DataCollector
+import asyncio
 
-from ..agents.consumer import ConsumerAgent
-from ..agents.prosumer import ProsumerAgent
-from ..agents.producer import EnergyProducerAgent
-from ..agents.utility import UtilityAgent
-from ..agents.regulator import RegulatorAgent
+from src.energy_market.agents.consumer import ConsumerAgent
+from src.energy_market.agents.prosumer import ProsumerAgent
+from src.energy_market.agents.producer import EnergyProducerAgent
+from src.energy_market.agents.utility import UtilityAgent
+from src.energy_market.agents.regulator import RegulatorAgent
 
 class EnergyMarketModel(Model):
     """Energy market model with multiple agent types."""
@@ -75,61 +76,76 @@ class EnergyMarketModel(Model):
         )
         
     def _create_agents(self) -> None:
-        """Create and initialize all agents in the market."""
+        """Create all agents in the model."""
+        personas = ["eco_friendly", "profit_driven", "balanced"]
         # Create consumers
         for i in range(self.num_consumers):
-            consumer = ConsumerAgent(
+            agent = ConsumerAgent(
                 unique_id=f"consumer_{i}",
                 model=self,
-                persona="default",
-                initial_resources=np.random.uniform(500, 2000),
-                energy_needs=np.random.uniform(50, 150)
+                persona=str(np.random.choice(personas, 1)[0]),
+                initial_resources=np.random.randint(1000, 2000),
+                energy_needs=100.0 * np.random.random()
             )
-            self.schedule.add(consumer)
-            self.market_agents['consumers'][consumer.unique_id] = consumer
+            self.schedule.add(agent)
             
         # Create prosumers
-        production_types = ["solar", "wind"]
         for i in range(self.num_prosumers):
-            prosumer = ProsumerAgent(
+            agent = ProsumerAgent(
                 unique_id=f"prosumer_{i}",
                 model=self,
-                persona="default",
-                production_type=production_types[i % len(production_types)],
-                initial_resources=np.random.uniform(2000, 5000),
-                energy_needs=np.random.uniform(50, 150),
-                max_production_capacity=np.random.uniform(100, 300)
+                persona=str(np.random.choice(personas, 1)[0]),
+                production_type="solar",  # or randomly choose between solar/wind
+                initial_resources=np.random.randint(1000, 2000),
+                energy_needs=50.0 * np.random.random(),
+                max_production_capacity=200.0 * np.random.random(),
+                storage_capacity=100.0 * np.random.random(),
+                green_energy_preference=0.8 * np.random.random()
             )
-            self.schedule.add(prosumer)
-            self.market_agents['prosumers'][prosumer.unique_id] = prosumer
+            self.schedule.add(agent)
             
         # Create producers
-        production_types = ["oil", "gas", "coal", "nuclear", "solar", "wind", "hydro"]
         for i in range(self.num_producers):
-            producer = EnergyProducerAgent(
+            agent = EnergyProducerAgent(
                 unique_id=f"producer_{i}",
                 model=self,
-                persona="default",
-                production_type=production_types[i % len(production_types)],
-                initial_resources=np.random.uniform(10000, 50000),
-                max_capacity=np.random.uniform(500, 2000)
+                persona=str(np.random.choice(personas, 1)[0]),
+                production_type=np.random.choice(["solar", "wind", "hydro", "coal", "gas"]),
+                initial_resources=np.random.randint(10000, 30000),
+                max_capacity=np.random.randint(400, 600),
+                base_production_cost=np.random.randint(40, 60),
+                maintenance_cost_rate=0.02,
+                upgrade_cost=5000.0,
+                upgrade_capacity_increase=200.0,
+                min_profit_margin=0.15
             )
-            self.schedule.add(producer)
-            self.market_agents['producers'][producer.unique_id] = producer
+            self.schedule.add(agent)
             
         # Create utilities
-        personas = ["eco_friendly", "profit_driven", "balanced"]
         for i in range(self.num_utilities):
-            utility = UtilityAgent(
+            agent = UtilityAgent(
                 unique_id=f"utility_{i}",
                 model=self,
-                persona=personas[i % len(personas)],
-                initial_resources=np.random.uniform(50000, 100000),
-                renewable_quota=0.2 if personas[i % len(personas)] == "eco_friendly" else 0.1
+                persona=str(np.random.choice(personas, 1)[0]),
+                initial_resources=np.random.randint(10000, 30000),
+                renewable_quota=0.2,
+                min_profit_margin=0.1,
+                storage_capacity=np.random.randint(400, 600),
+                contract_duration=5,
             )
-            self.schedule.add(utility)
-            self.market_agents['utilities'][utility.unique_id] = utility
+            self.schedule.add(agent)
             
+        # Connect consumers to utilities
+        consumers = [agent for agent in self.schedule.agents if isinstance(agent, ConsumerAgent)]
+        utilities = [agent for agent in self.schedule.agents if isinstance(agent, UtilityAgent)]
+        for consumer in consumers:
+            # Randomly assign consumer to a utility
+            utility = np.random.choice(utilities)
+            utility.customer_base[consumer.unique_id] = {
+                'avg_consumption': consumer.energy_needs,
+                'last_purchase': 0
+            }
+        
         # Create regulator
         regulator = RegulatorAgent(
             unique_id="regulator",
@@ -303,21 +319,54 @@ class EnergyMarketModel(Model):
             'offers': offers
         }
         
-    def step(self) -> None:
-        """Execute one step of the model."""
-        print("\nExecuting model step...")
-        
+    async def step_async(self) -> None:
+        """Execute one step of the model with parallel agent execution."""
+        # Run all agent step tasks concurrently
+        print("\nExecuting model step asyncronously...")
+
         # Update market state
         market_state = self.get_market_state()
         print(f"  Market state: Price={market_state['average_price']:.2f}, Supply={market_state['total_supply']:.2f}, Demand={market_state['total_demand']:.2f}")
         
-        # Execute agent steps in random order
-        print("  Executing agent steps:")
+        # Run all agent steps in parallel and wait for completion
+        tasks = []
         for agent in self.schedule.agents:
-            print(f"    - {agent.__class__.__name__} {agent.unique_id}")
-            agent.step()
+            tasks.append(agent.step_async())
+        await asyncio.gather(*tasks)
         
         # Collect data
         print("  Collecting data...")
         self.datacollector.collect(self)
-        print("  Step complete.\n") 
+        
+        # Advance the schedule
+        self.schedule.step()
+        
+        print("  Async step complete.\n") 
+        
+    def get_available_offers(self) -> List[Dict[str, Any]]:
+        """Get all available energy offers from producers and prosumers.
+        
+        Returns:
+            List of available offers
+        """
+        offers = []
+        
+        for agent in self.schedule.agents:
+            if hasattr(agent, 'current_production') and agent.current_production > 0:
+                if isinstance(agent, EnergyProducerAgent):
+                    price = agent.base_production_cost * (1 + self.carbon_tax_rate / 100)
+                    if agent.is_renewable():
+                        price -= self.renewable_incentive
+                elif isinstance(agent, ProsumerAgent):
+                    price = self.initial_price * (1 + 0.2 * np.random.random())
+                else:
+                    continue
+                    
+                offers.append({
+                    'seller_id': agent.unique_id,
+                    'amount': agent.current_production,
+                    'price': price,
+                    'is_renewable': agent.is_renewable() if hasattr(agent, 'is_renewable') else agent.production_type in ["solar", "wind", "hydro"]
+                })
+                
+        return offers

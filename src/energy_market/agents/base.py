@@ -1,7 +1,7 @@
 from mesa import Agent
 import numpy as np
 from typing import Optional, Dict, Any
-from ..utils.llm_decision import LLMDecisionMaker
+from src.energy_market.utils.llm_decision import LLMDecisionMaker
 
 class EnergyMarketAgent(Agent):
     """Base class for all agents in the energy market."""
@@ -70,4 +70,8 @@ class EnergyMarketAgent(Agent):
         
     def step(self) -> None:
         """Base step function to be implemented by child classes."""
+        pass
+
+    async def step_async(self) -> None:
+        """Execute one step of the agent's behavior asynchronously."""
         pass 

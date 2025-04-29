@@ -68,14 +68,10 @@ class UtilityAgent(EnergyMarketAgent):
             
         self.current_selling_price = avg_market_price * (1 + self.min_profit_margin)
     
-    # TODO: use LLM decision making here
-    def evaluate_producer_contract(self, 
-                                 producer_id: str,
-                                 contract: Dict[str, Any]) -> float:
+    def evaluate_producer_contract(self, contract: Dict[str, Any]) -> float:
         """Evaluate a proposed contract from a producer.
         
         Args:
-            producer_id: ID of the producer
             contract: Contract terms
             
         Returns:
@@ -91,7 +87,7 @@ class UtilityAgent(EnergyMarketAgent):
         
         # Adjust for renewable preference
         renewable_score = 0.0
-        if contract['is_renewable']:
+        if contract.get('is_renewable', False):
             if self.persona == "eco_friendly":
                 renewable_score = 0.4
             elif self.persona == "balanced":
@@ -100,7 +96,8 @@ class UtilityAgent(EnergyMarketAgent):
                 renewable_score = 0.1
                 
         # Consider contract duration
-        duration_score = min(0.2, contract['duration'] / 360)  # Cap at 1 year
+        duration = contract.get('duration', 0)
+        duration_score = min(0.2, duration / 360)  # Cap at 1 year
         
         return 0.5 * price_score + 0.3 * renewable_score + 0.2 * duration_score
         
@@ -153,7 +150,7 @@ class UtilityAgent(EnergyMarketAgent):
             )
             
             # Evaluate and potentially accept contract
-            score = self.evaluate_producer_contract(producer_id, contract)
+            score = self.evaluate_producer_contract(contract)
             if score > 0:
                 self.producer_contracts[producer_id] = contract
                 total_contracted += contract['amount']
@@ -161,47 +158,6 @@ class UtilityAgent(EnergyMarketAgent):
                     renewable_contracted += contract['amount']
                     renewable_ratio = renewable_contracted / total_contracted
                     
-    def calculate_selling_price(self) -> float:
-        """Calculate the optimal selling price based on costs and market conditions."""
-        # Calculate weighted average buying price
-        total_amount = 0.0
-        total_cost = 0.0
-        
-        for contract in self.producer_contracts.values():
-            amount = contract['amount']
-            total_amount += amount
-            total_cost += amount * contract['price']
-            
-        if total_amount > 0:
-            avg_buying_price = total_cost / total_amount
-        else:
-            market_state = self.model.get_market_state()
-            avg_buying_price = market_state['average_price']
-            
-        # Add spot market purchases
-        if self.spot_market_purchases > 0:
-            market_state = self.model.get_market_state()
-            total_amount += self.spot_market_purchases
-            total_cost += self.spot_market_purchases * market_state['spot_price']
-            avg_buying_price = total_cost / total_amount
-            
-        # Calculate minimum viable price
-        min_price = avg_buying_price * (1 + self.min_profit_margin)
-        
-        # Adjust based on storage levels and market conditions
-        storage_ratio = self.energy_stored / self.storage_capacity
-        market_state = self.model.get_market_state()
-        
-        if storage_ratio < 0.2:  # Low storage
-            target_price = max(min_price * 1.2, market_state['average_price'] * 1.1)
-        elif storage_ratio > 0.8:  # High storage
-            target_price = max(min_price, market_state['average_price'] * 0.95)
-        else:  # Normal storage
-            target_price = max(min_price, market_state['average_price'])
-            
-        # Smooth price changes
-        return (self.current_selling_price + target_price) / 2
-        
     def update_customer_base(self) -> None:
         """Update customer statistics and remove inactive customers."""
         inactive_customers = []
@@ -221,47 +177,7 @@ class UtilityAgent(EnergyMarketAgent):
         # Remove inactive customers
         for customer_id in inactive_customers:
             del self.customer_base[customer_id]
-            
-    def sell_energy(self, customer_id: str, amount: float) -> Dict[str, Any]:
-        """Sell energy to a customer.
-        
-        Args:
-            customer_id: ID of the customer
-            amount: Amount of energy requested
-            
-        Returns:
-            Dict with transaction details
-        """
-        # Check if we have enough energy
-        available = self.energy_stored
-        for contract in self.producer_contracts.values():
-            available += contract['amount']
-            
-        if amount > available:
-            return {
-                'success': False,
-                'amount': 0,
-                'price': self.current_selling_price,
-                'reason': 'Insufficient supply'
-            }
-            
-        # Record transaction
-        self.record_transaction('sell', amount, self.current_selling_price, customer_id)
-        
-        # Update customer info
-        if customer_id not in self.customer_base:
-            self.customer_base[customer_id] = {
-                'first_purchase': self.model.schedule.time,
-                'avg_consumption': amount
-            }
-        self.customer_base[customer_id]['last_purchase'] = self.model.schedule.time
-        
-        return {
-            'success': True,
-            'amount': amount,
-            'price': self.current_selling_price
-        }
-        
+                
     def get_state(self) -> Dict[str, Any]:
         """Get the current state of the utility."""
         state = {
@@ -280,14 +196,14 @@ class UtilityAgent(EnergyMarketAgent):
         }
         return state
         
-    def step(self) -> None:
+    async def step_async(self) -> None:
         """Execute one step of the utility agent."""
         # Get current state
         state = self.get_state()
         market_state = self.model.get_market_state()
         
         # Get LLM decision about utility strategy
-        decision = self.llm_decision_maker.get_utility_decision({
+        decision = await self.llm_decision_maker.get_utility_decision_async({
             **state,
             'market_state': market_state
         })

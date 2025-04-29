@@ -5,8 +5,9 @@ import seaborn as sns
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 import time
+import asyncio
 
-from .models.energy_market import EnergyMarketModel
+from models.energy_market import EnergyMarketModel
 
 class EnergyMarketSimulation:
     """Class to run and analyze energy market simulations."""
@@ -45,8 +46,8 @@ class EnergyMarketSimulation:
         self.output_dir = Path(output_dir) if output_dir else Path.cwd()
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
-    def run(self, num_steps: int = 168) -> None:
-        """Run simulation for specified number of steps.
+    async def run_async(self, num_steps: int = 168) -> None:
+        """Run simulation for specified number of steps asynchronously.
         
         Args:
             num_steps: Number of steps to run (default: 1 week of hourly steps)
@@ -58,8 +59,8 @@ class EnergyMarketSimulation:
             step_start = time.time()
             print(f"\nStep {step + 1}/{num_steps} ({(step + 1) / num_steps * 100:.1f}%)")
             
-            # Execute model step
-            self.model.step()
+            # Execute model step asynchronously
+            await self.model.step_async()
             
             # Show step timing
             step_time = time.time() - step_start
@@ -72,7 +73,7 @@ class EnergyMarketSimulation:
         
         total_time = time.time() - start_time
         print(f"\nSimulation complete! Total time: {total_time/60:.1f}m")
-            
+        
     def get_model_data(self) -> pd.DataFrame:
         """Get model-level data from simulation.
         
@@ -244,8 +245,8 @@ class EnergyMarketSimulation:
             'agent_performance': {
                 'avg_final_resources': final_resources.mean(),
                 'avg_final_profit': final_profits.mean(),
-                'resource_inequality': final_resources.std() / final_resources.mean(),
-                'profit_inequality': final_profits.std() / final_profits.mean()
+                'resource_inequality': final_resources.std() / final_resources.mean() if final_resources.mean() != 0 else 0,
+                'profit_inequality': final_profits.std() / final_profits.mean() if final_profits.mean() != 0 else 0
             }
         }
         
@@ -270,14 +271,15 @@ class EnergyMarketSimulation:
         self.plot_agent_resources()
         self.plot_agent_profits()
         
-    def run_and_analyze(self, num_steps: int = 168) -> None:
+    async def run_and_analyze(self, num_steps: int = 168, logger = None) -> None:
         """Run simulation and generate all analyses.
         
         Args:
             num_steps: Number of steps to run
+            logger: Optional logger instance
         """
         print("Running simulation...")
-        self.run(num_steps)
+        await self.run_async(num_steps)
         
         print("Generating plots...")
         self.plot_all()

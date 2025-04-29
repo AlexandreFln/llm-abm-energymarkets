@@ -49,7 +49,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
         self.min_profit_margin = min_profit_margin
         
         # Dynamic state variables
-        self.current_production = 0.0
+        self.current_production = max_capacity * 0.8  # Start at 80% of capacity
         self.current_price = base_production_cost * (1 + min_profit_margin * 2)
         self.utility_contracts: Dict[str, Dict[str, Any]] = {}
         self.production_efficiency = 1.0
@@ -57,96 +57,6 @@ class EnergyProducerAgent(EnergyMarketAgent):
     def is_renewable(self) -> bool:
         """Check if the production type is renewable."""
         return self.production_type in ["solar", "wind", "hydro"]
-        
-    def calculate_production_cost(self, amount: float) -> float:
-        """Calculate the cost to produce a given amount of energy.
-        
-        Args:
-            amount: Amount of energy to produce
-            
-        Returns:
-            float: Total cost of production
-        """
-        # Base cost with efficiency factor
-        base_cost = amount * self.base_production_cost / self.production_efficiency
-        
-        # Add maintenance cost
-        maintenance = self.max_capacity * self.maintenance_cost_rate
-        
-        # Add carbon tax for non-renewable sources
-        if not self.is_renewable():
-            carbon_tax = amount * self.model.get_carbon_tax_rate()
-        else:
-            carbon_tax = 0
-            
-        return base_cost + maintenance + carbon_tax
-        
-    # TODO: use LLM decision making here
-    def calculate_optimal_production(self) -> float:
-        """Calculate optimal production level based on contracts and market conditions."""
-        total_contracted = sum(
-            contract['amount'] for contract in self.utility_contracts.values()
-        )
-        
-        # Consider market demand beyond contracts
-        market_state = self.model.get_market_state()
-        market_demand = market_state['total_demand']
-        market_supply = market_state['total_supply']
-        
-        # Calculate market share based on capacity
-        total_capacity = market_state['total_capacity']
-        market_share = self.max_capacity / total_capacity if total_capacity > 0 else 0
-        
-        # Estimate additional production for spot market
-        potential_spot_demand = max(0, market_demand - market_supply) * market_share
-        
-        # Calculate optimal production considering costs and prices
-        optimal_amount = total_contracted + potential_spot_demand
-        optimal_amount = min(optimal_amount, self.max_capacity)
-        
-        # Ensure production cost allows for minimum profit margin
-        max_iterations = 20  # Maximum number of iterations to prevent infinite loops
-        min_threshold = 0.01  # Minimum production threshold (1% of max capacity)
-        iteration = 0
-        
-        while optimal_amount > min_threshold * self.max_capacity and iteration < max_iterations:
-            cost = self.calculate_production_cost(optimal_amount)
-            if cost / optimal_amount * (1 + self.min_profit_margin) <= self.current_price:
-                break
-            optimal_amount *= 0.9  # Reduce by 10% and try again
-            iteration += 1
-            
-        # If we hit the iteration limit, return the minimum threshold
-        if iteration >= max_iterations:
-            optimal_amount = min_threshold * self.max_capacity
-            
-        return optimal_amount
-        
-    # TODO: use LLM decision making here
-    def adjust_price(self) -> None:
-        """Adjust energy price based on market conditions and costs."""
-        market_state = self.model.get_market_state()
-        avg_market_price = market_state['average_price']
-        
-        # Calculate minimum viable price
-        min_price = self.base_production_cost * (1 + self.min_profit_margin)
-        
-        if not self.is_renewable():
-            min_price *= 1 + self.model.get_carbon_tax_rate()
-            
-        # Adjust price based on market conditions and production costs
-        if self.current_production > self.max_capacity * 0.9:
-            # High utilization - increase price
-            target_price = max(avg_market_price * 1.1, min_price * 1.2)
-        elif self.current_production < self.max_capacity * 0.5:
-            # Low utilization - decrease price
-            target_price = max(avg_market_price * 0.9, min_price)
-        else:
-            # Normal utilization - move toward market average
-            target_price = max(avg_market_price, min_price)
-            
-        # Smooth price changes
-        self.current_price = (self.current_price + target_price) / 2
         
     # TODO: use LLM decision making here
     def negotiate_contract(self, utility_id: str, amount: float, duration: int) -> Dict[str, Any]:
@@ -209,32 +119,6 @@ class EnergyProducerAgent(EnergyMarketAgent):
         # Remove expired contracts
         for utility_id in expired_contracts:
             del self.utility_contracts[utility_id]
-            
-    # TODO: use LLM decision making here
-    def consider_upgrade(self) -> bool:
-        """Consider upgrading production capacity.
-        
-        Returns:
-            bool: Whether upgrade was performed
-        """
-        if self.resources < self.upgrade_cost * 2:  # Maintain safety margin
-            return False
-            
-        # Calculate ROI based on recent performance
-        transaction_summary = self.get_transaction_summary()
-        daily_revenue = transaction_summary['total_value'] / max(1, len(self.transaction_history))
-        daily_production = transaction_summary['total_volume'] / max(1, len(self.transaction_history))
-        
-        if daily_production > self.max_capacity * 0.8:  # High utilization
-            expected_increase = self.upgrade_capacity_increase * self.current_price
-            payback_days = self.upgrade_cost / expected_increase
-            
-            if payback_days < 60:  # Less than 60 days payback period
-                self.update_resources(-self.upgrade_cost)
-                self.max_capacity += self.upgrade_capacity_increase
-                return True
-                
-        return False
         
     def maintain_facility(self) -> None:
         """Perform facility maintenance and update efficiency."""
@@ -265,17 +149,20 @@ class EnergyProducerAgent(EnergyMarketAgent):
         }
         return state
         
-    def step(self) -> None:
+    async def step_async(self) -> None:
         """Execute one step of the producer agent."""
         # Maintain facility and update efficiency
         self.maintain_facility()
+        
+        # Fulfill existing contracts
+        self.fulfill_contracts()
         
         # Get current state
         state = self.get_state()
         market_state = self.model.get_market_state()
         
         # Get LLM decision about production strategy
-        decision = self.llm_decision_maker.get_producer_decision({
+        decision = await self.llm_decision_maker.get_producer_decision_async({
             **state,
             'market_state': market_state
         })
@@ -293,10 +180,5 @@ class EnergyProducerAgent(EnergyMarketAgent):
         
         # Consider capacity upgrade based on LLM decision
         if decision.consider_upgrade:
-            self.consider_upgrade()
-            
-        # Maintain facility
-        self.maintain_facility()
-        
-        # Fulfill existing contracts
-        self.fulfill_contracts() 
+            self.max_capacity += self.upgrade_capacity_increase
+            self.resources -= self.upgrade_cost

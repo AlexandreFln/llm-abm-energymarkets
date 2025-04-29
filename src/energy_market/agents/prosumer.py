@@ -1,11 +1,10 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import numpy as np
 
 from .consumer import ConsumerAgent
 
 class ProsumerAgent(ConsumerAgent):
     """Prosumer agent that can both produce and consume energy."""
-    #TODO: remove price tolerance ?
     def __init__(self,
                  unique_id: str,
                  model: Any,
@@ -13,14 +12,12 @@ class ProsumerAgent(ConsumerAgent):
                  production_type: str = "solar",
                  initial_resources: float = 2000.0,
                  energy_needs: float = 100.0,
-                 max_price_tolerance: float = 150.0,
-                 min_price_tolerance: float = 50.0,
-                 green_energy_preference: float = 0.7,
                  max_production_capacity: float = 200.0,
                  storage_capacity: float = 300.0,
                  maintenance_cost_rate: float = 0.05,
                  upgrade_cost: float = 1000.0,
-                 upgrade_capacity_increase: float = 50.0):
+                 upgrade_capacity_increase: float = 50.0,
+                 green_energy_preference: float = 0.7):
         """Initialize prosumer agent.
         
         Args:
@@ -30,19 +27,20 @@ class ProsumerAgent(ConsumerAgent):
             production_type: Type of energy production (solar, wind, etc.)
             initial_resources: Starting monetary resources
             energy_needs: Amount of energy needed per step
-            max_price_tolerance: Maximum price willing to pay per unit
-            min_price_tolerance: Minimum price considered suspicious
-            green_energy_preference: Preference for renewable energy (0-1)
             max_production_capacity: Maximum energy production per step
             storage_capacity: Maximum energy storage capacity
             maintenance_cost_rate: Maintenance cost as fraction of capacity
             upgrade_cost: Cost to upgrade production capacity
             upgrade_capacity_increase: Amount capacity increases per upgrade
+            green_energy_preference: Preference for renewable energy (0-1)
         """
         super().__init__(
-            unique_id, model, persona, initial_resources,
-            energy_needs, max_price_tolerance, min_price_tolerance,
-            green_energy_preference
+            unique_id=unique_id,
+            model=model,
+            persona=persona,
+            initial_resources=initial_resources,
+            energy_needs=energy_needs,
+            renewable_preference=green_energy_preference
         )
         self.production_type = production_type
         self.max_production_capacity = max_production_capacity
@@ -54,7 +52,7 @@ class ProsumerAgent(ConsumerAgent):
         # Dynamic state variables
         self.current_production = 0.0
         self.energy_stored = 0.0
-        self.selling_price = max_price_tolerance * 0.8  # Initial selling price
+        self.selling_price = 100.0  # Initial selling price
         self.connected_to_grid = True
         
     def calculate_production(self) -> float:
@@ -82,74 +80,6 @@ class ProsumerAgent(ConsumerAgent):
         maintenance_cost = self.max_production_capacity * self.maintenance_cost_rate
         self.update_resources(-maintenance_cost)
         
-    def store_energy(self, amount: float) -> float:
-        """Store energy up to storage capacity.
-        
-        Returns:
-            float: Amount of energy that couldn't be stored
-        """
-        space_available = self.storage_capacity - self.energy_stored
-        amount_stored = min(amount, space_available)
-        self.energy_stored += amount_stored
-        return amount - amount_stored
-        
-    def use_stored_energy(self, amount: float) -> float:
-        """Use energy from storage.
-        
-        Returns:
-            float: Amount of energy actually used
-        """
-        amount_used = min(amount, self.energy_stored)
-        self.energy_stored -= amount_used
-        return amount_used
-    
-    def adjust_selling_price(self) -> None:
-        """Adjust selling price based on market conditions and inventory."""
-        market_state = self.model.get_market_state()
-        avg_market_price = market_state['average_price']
-        storage_ratio = self.energy_stored / self.storage_capacity
-        
-        #TODO: use LLM decision making here
-        # Adjust price based on storage levels and market price
-        if storage_ratio > 0.8:  # High storage - lower price
-            self.selling_price = min(
-                self.selling_price,
-                avg_market_price * 0.95
-            )
-        elif storage_ratio < 0.2:  # Low storage - raise price
-            self.selling_price = min(
-                self.max_price_tolerance,
-                avg_market_price * 1.05
-            )
-        else:  # Normal storage - move toward market price
-            self.selling_price = (self.selling_price + avg_market_price) / 2
-            
-    #TODO: use LLM decision making here
-    def consider_upgrade(self) -> bool:
-        """Consider upgrading production capacity.
-        
-        Returns:
-            bool: Whether upgrade was performed
-        """
-        if self.resources < self.upgrade_cost * 2:  # Maintain safety margin
-            return False
-            
-        # Calculate ROI based on recent transactions
-        transaction_summary = self.get_transaction_summary()
-        daily_revenue = transaction_summary['total_value'] / max(1, len(self.transaction_history))
-        daily_production = transaction_summary['total_volume'] / max(1, len(self.transaction_history))
-        
-        if daily_production > self.max_production_capacity * 0.8:  # High utilization
-            expected_increase = self.upgrade_capacity_increase * self.selling_price
-            payback_days = self.upgrade_cost / expected_increase
-            
-            if payback_days < 30:  # Less than 30 days payback period
-                self.update_resources(-self.upgrade_cost)
-                self.max_production_capacity += self.upgrade_capacity_increase
-                return True
-                
-        return False
-        
     def get_state(self) -> Dict[str, Any]:
         """Get the current state of the prosumer."""
         state = {
@@ -166,8 +96,7 @@ class ProsumerAgent(ConsumerAgent):
         }
         return state
     
-    #TODO: use LLM decision making here for mix strategy between selling to local grid, storing energy, or buying from market
-    def step(self) -> None:
+    async def step_async(self) -> None:
         """Execute one step of the prosumer agent."""
         # Calculate production and pay maintenance
         self.current_production = self.calculate_production()
@@ -176,9 +105,9 @@ class ProsumerAgent(ConsumerAgent):
         # Get current state
         state = self.get_state()
         market_state = self.model.get_market_state()
-        
+
         # Get LLM decision about energy management strategy
-        decision = self.llm_decision_maker.get_prosumer_decision({
+        decision = await self.llm_decision_maker.get_prosumer_decision_async({
             **state,
             'market_state': market_state
         })
@@ -221,4 +150,5 @@ class ProsumerAgent(ConsumerAgent):
             
         # Consider capacity upgrade based on LLM decision
         if decision.consider_upgrade:
-            self.consider_upgrade() 
+            self.max_production_capacity += self.upgrade_capacity_increase
+            self.resources -= self.upgrade_cost
