@@ -217,12 +217,18 @@ class EnergyMarketSimulation:
         final_resources = agent_data.xs(
             agent_data.index.get_level_values('Step').max(),
             level='Step'
-        )['Resources']
+        )['Resources'].dropna()  # Drop NaN values
         
         final_profits = agent_data.xs(
             agent_data.index.get_level_values('Step').max(),
             level='Step'
-        )['Profit']
+        )['Profit'].dropna()  # Drop NaN values
+        
+        # Calculate means and standard deviations with proper NaN handling
+        resources_mean = final_resources.mean() if not final_resources.empty else 0
+        resources_std = final_resources.std() if not final_resources.empty else 0
+        profits_mean = final_profits.mean() if not final_profits.empty else 0
+        profits_std = final_profits.std() if not final_profits.empty else 0
         
         return {
             'price_statistics': {
@@ -243,10 +249,10 @@ class EnergyMarketSimulation:
                 'avg_market_concentration': model_data['Market_Concentration'].mean()
             },
             'agent_performance': {
-                'avg_final_resources': final_resources.mean(),
-                'avg_final_profit': final_profits.mean(),
-                'resource_inequality': final_resources.std() / final_resources.mean() if final_resources.mean() != 0 else 0,
-                'profit_inequality': final_profits.std() / final_profits.mean() if final_profits.mean() != 0 else 0
+                'avg_final_resources': resources_mean,
+                'avg_final_profit': profits_mean,
+                'resource_inequality': resources_std / resources_mean if resources_mean != 0 else 0,
+                'profit_inequality': profits_std / profits_mean if profits_mean != 0 else 0
             }
         }
         

@@ -107,10 +107,10 @@ class ProsumerAgent(ConsumerAgent):
         market_state = self.model.get_market_state()
 
         # Get LLM decision about energy management strategy
-        decision = await self.llm_decision_maker.get_prosumer_decision_async({
-            **state,
-            'market_state': market_state
-        })
+        decision = await self.llm_decision_maker.get_prosumer_decision_async(
+            state,
+            market_state,
+            )
         
         # Apply LLM decisions
         energy_needed = self.energy_needs
@@ -141,12 +141,13 @@ class ProsumerAgent(ConsumerAgent):
         # Sell remaining production based on LLM decision
         if remaining_production > 0:
             self.selling_price = decision.selling_price
-            self.model.add_energy_offer(
-                self.unique_id,
-                remaining_production,
-                self.selling_price,
-                True  # Always renewable
-            )
+            market_state['offers'].append({
+                    'seller_id': self.unique_id,
+                    'seller_type': 'prosumer',
+                    'price': self.selling_price,
+                    'amount': remaining_production,
+                    'is_renewable': True
+                    })
             
         # Consider capacity upgrade based on LLM decision
         if decision.consider_upgrade:

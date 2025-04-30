@@ -153,27 +153,17 @@ class LLMDecisionMaker:
         )
         
         prompt = f"""Given your current state:
-
+<current_state>
 {self._format_state_for_prompt(state)}
+</current_state>
 
-Among all available offers, choose the best offer and score it on a scale of 0 to 100.
-
-Respond with a JSON object containing:
-- "best_offer": The best offer (with seller_id, amount, price, is_renewable)
-- "best_score": The score of the best offer
-
-Example response:
-{{
-    "best_offer": {{"seller_id": "utility1", "amount": 100.0, "price": 120.0, "is_renewable": true}},
-    "best_score": 85
-}}
-
+Among the following available offers, choose the best offer and score it on a scale of 0 to 100.
 Available offers:
 {available_offers}
 """
         return await self._safe_llm_call_async(prompt, default_response, "consumer")
         
-    async def get_prosumer_decision_async(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    async def get_prosumer_decision_async(self, state: Dict[str, Any], market_state: Dict[str, Any]) -> Dict[str, Any]:
         """Get prosumer decision about energy production and sales asynchronously.
         
         Args:
@@ -190,37 +180,20 @@ Available offers:
             consider_upgrade=False
         )
         
-        prompt = f"""Given your current state:
-
+        prompt = f"""Decide how to manage your energy production and storage given the following informations::
+-Your current state:
+<current_state>
 {self._format_state_for_prompt(state)}
+</current_state>
 
-Decide how to manage your energy production and storage.
-Consider:
-- Your production capacity and efficiency
-- Current market prices and trends
-- Your storage levels and capacity
-- Your own energy needs
-- Potential for capacity upgrades
-
-Respond with a JSON object containing:
-- "sell_amount": Amount of energy to sell
-- "selling_price": Price to offer energy at
-- "use_storage": Amount of stored energy to use
-- "store_amount": Amount of energy to store
-- "consider_upgrade": Whether to consider a capacity upgrade
-
-Example response:
-{{
-    "sell_amount": 50.0,
-    "selling_price": 90.0,
-    "use_storage": 20.0,
-    "store_amount": 30.0,
-    "consider_upgrade": false
-}}
+-Market state:
+<market_state>
+{self._format_state_for_prompt(market_state)}
+</market_state>
 """
         return await self._safe_llm_call_async(prompt, default_response, "prosumer")
         
-    async def get_producer_decision_async(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    async def get_producer_decision_async(self, state: Dict[str, Any], market_state: Dict[str, Any]) -> Dict[str, Any]:
         """Get producer decision about energy production and pricing asynchronously.
         
         Args:
@@ -233,41 +206,24 @@ Example response:
             production_level=state.get("max_capacity", 0) * 0.8,
             price=state.get("current_price", 100),
             accept_contracts=True,
-            min_contract_duration=30,
+            min_contract_duration=3,
             consider_upgrade=False
         )
         
-        prompt = f"""Given your current state:
-
+        prompt = f"""Decide on your production and pricing strategy given the following informations::
+-Your current state:
+<current_state>
 {self._format_state_for_prompt(state)}
+</current_state>
 
-Decide on your production strategy.
-Consider:
-- Your production capacity and costs
-- Market demand and competition
-- Current contracts and obligations
-- Regulatory environment (carbon tax)
-- Potential for capacity upgrades
-
-Respond with a JSON object containing:
-- "production_level": Target production level
-- "price": Selling price per unit
-- "accept_contracts": Whether to accept new contracts
-- "min_contract_duration": Minimum contract duration to accept
-- "consider_upgrade": Whether to consider a capacity upgrade
-
-Example response:
-{{
-    "production_level": 800.0,
-    "price": 95.0,
-    "accept_contracts": true,
-    "min_contract_duration": 30,
-    "consider_upgrade": true
-}}
+-Market state:
+<market_state>
+{self._format_state_for_prompt(market_state)}
+</market_state>
 """
         return await self._safe_llm_call_async(prompt, default_response, "producer")
         
-    async def get_utility_decision_async(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    async def get_utility_decision_async(self, state: Dict[str, Any], market_state: Dict[str, Any]) -> Dict[str, Any]:
         """Get utility decision about energy procurement and pricing asynchronously.
         
         Args:
@@ -284,37 +240,20 @@ Example response:
             storage_strategy="maintain"
         )
         
-        prompt = f"""Given your current state:
-
+        prompt = f"""Decide on your market strategy given the following informations:
+-Your current state:
+<current_state>
 {self._format_state_for_prompt(state)}
+</current_state>
 
-Decide on your market strategy.
-Consider:
-- Your current contracts and prices
-- Customer demand and behavior
-- Renewable energy quotas
-- Market competition
-- Regulatory requirements
-
-Respond with a JSON object containing:
-- "target_contracts": Number of new contracts to seek
-- "max_purchase_price": Maximum price to pay for energy
-- "selling_price": Price to sell energy at
-- "renewable_target": Target percentage of renewable energy
-- "storage_strategy": "increase", "decrease", or "maintain"
-
-Example response:
-{{
-    "target_contracts": 3,
-    "max_purchase_price": 85.0,
-    "selling_price": 110.0,
-    "renewable_target": 0.25,
-    "storage_strategy": "increase"
-}}
+-Market state:
+<market_state>
+{self._format_state_for_prompt(market_state)}
+</market_state>
 """
         return await self._safe_llm_call_async(prompt, default_response, "utility")
         
-    async def get_regulator_decision_async(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    async def get_regulator_decision_async(self, state: Dict[str, Any], market_state: Dict[str, Any]) -> Dict[str, Any]:
         """Get regulator decision about market intervention asynchronously.
         
         Args:
@@ -331,32 +270,15 @@ Example response:
             issue_warnings=[]
         )
         
-        prompt = f"""Given your current state:
-
+        prompt = f"""Decide on regulatory actions given the following informations:
+-Your current state:
+<current_state>
 {self._format_state_for_prompt(state)}
+</current_state>
 
-Decide on regulatory actions.
-Consider:
-- Market concentration and competition
-- Price stability and affordability
-- Renewable energy adoption
-- Recent violations and fines
-- Overall market health
-
-Respond with a JSON object containing:
-- "adjust_carbon_tax": Percentage change in carbon tax (-10 to +10)
-- "price_intervention": Whether to intervene in pricing
-- "max_price_increase": Maximum allowed price increase
-- "enforce_renewable_quota": Whether to strictly enforce quotas
-- "issue_warnings": List of warning types to issue
-
-Example response:
-{{
-    "adjust_carbon_tax": 5.0,
-    "price_intervention": true,
-    "max_price_increase": 0.15,
-    "enforce_renewable_quota": true,
-    "issue_warnings": ["price_gouging", "market_concentration"]
-}}
+-Market state:
+<market_state>
+{self._format_state_for_prompt(market_state)}
+</market_state>
 """
         return await self._safe_llm_call_async(prompt, default_response, "regulator") 

@@ -250,10 +250,10 @@ class RegulatorAgent(EnergyMarketAgent):
         state = self.get_state()
         
         # Get LLM decision about regulatory actions
-        decision = await self.llm_decision_maker.get_regulator_decision_async({
-            **state,
-            'market_state': market_state
-        })
+        decision = await self.llm_decision_maker.get_regulator_decision_async(
+            state=state,
+            market_state=market_state,
+        )
         
         # Apply LLM decisions
         # Adjust carbon tax

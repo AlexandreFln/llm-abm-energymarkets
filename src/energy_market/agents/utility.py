@@ -16,7 +16,7 @@ class UtilityAgent(EnergyMarketAgent):
                  renewable_quota: float = 0.2,
                  min_profit_margin: float = 0.1,
                  storage_capacity: float = 500.0,
-                 contract_duration: int = 30):
+                 contract_duration: int = 3):
         """Initialize utility agent.
         
         Args:
@@ -203,10 +203,10 @@ class UtilityAgent(EnergyMarketAgent):
         market_state = self.model.get_market_state()
         
         # Get LLM decision about utility strategy
-        decision = await self.llm_decision_maker.get_utility_decision_async({
-            **state,
-            'market_state': market_state
-        })
+        decision = await self.llm_decision_maker.get_utility_decision_async(
+            state=state,
+            market_state=market_state,
+        )
         
         # Apply LLM decisions
         self.renewable_quota = decision.renewable_target
@@ -226,12 +226,13 @@ class UtilityAgent(EnergyMarketAgent):
                 market_state['total_demand']
             )
             if amount_to_sell > 0:
-                self.model.add_energy_offer(
-                    self.unique_id,
-                    amount_to_sell,
-                    self.current_selling_price,
-                    False  # Not renewable
-                )
+                market_state['offers'].append({
+                    'seller_id': self.unique_id,
+                    'seller_type': 'utility',
+                    'price': self.current_selling_price,
+                    'amount': amount_to_sell,
+                    'is_renewable': False
+                    })
                 self.energy_stored -= amount_to_sell
                 
         # Manage producer contracts

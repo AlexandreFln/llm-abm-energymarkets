@@ -22,7 +22,7 @@ def parse_args():
     parser.add_argument(
         '--num-consumers',
         type=int,
-        default=5,
+        default=3,
         help='Number of consumer agents (default: 100)'
     )
     
@@ -36,7 +36,7 @@ def parse_args():
     parser.add_argument(
         '--num-producers',
         type=int,
-        default=3,
+        default=2,
         help='Number of producer agents (default: 10)'
     )
     
@@ -83,7 +83,7 @@ def main():
     
     # Create output directory with timestamp if not specified
     if args.output_dir is None:
-        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M')
         output_dir = Path.cwd() / f'results/results_{timestamp}'
     else:
         output_dir = Path(args.output_dir)

@@ -88,6 +88,7 @@ class EnergyMarketModel(Model):
                 energy_needs=100.0 * np.random.random()
             )
             self.schedule.add(agent)
+            self.market_agents['consumers'][agent.unique_id] = agent
             
         # Create prosumers
         for i in range(self.num_prosumers):
@@ -103,7 +104,8 @@ class EnergyMarketModel(Model):
                 green_energy_preference=0.8 * np.random.random()
             )
             self.schedule.add(agent)
-            
+            self.market_agents['prosumers'][agent.unique_id] = agent
+
         # Create producers
         for i in range(self.num_producers):
             agent = EnergyProducerAgent(
@@ -120,7 +122,8 @@ class EnergyMarketModel(Model):
                 min_profit_margin=0.15
             )
             self.schedule.add(agent)
-            
+            self.market_agents['producers'][agent.unique_id] = agent
+
         # Create utilities
         for i in range(self.num_utilities):
             agent = UtilityAgent(
@@ -134,18 +137,8 @@ class EnergyMarketModel(Model):
                 contract_duration=5,
             )
             self.schedule.add(agent)
+            self.market_agents['utilities'][agent.unique_id] = agent
             
-        # Connect consumers to utilities
-        consumers = [agent for agent in self.schedule.agents if isinstance(agent, ConsumerAgent)]
-        utilities = [agent for agent in self.schedule.agents if isinstance(agent, UtilityAgent)]
-        for consumer in consumers:
-            # Randomly assign consumer to a utility
-            utility = np.random.choice(utilities)
-            utility.customer_base[consumer.unique_id] = {
-                'avg_consumption': consumer.energy_needs,
-                'last_purchase': 0
-            }
-        
         # Create regulator
         regulator = RegulatorAgent(
             unique_id="regulator",
@@ -155,6 +148,82 @@ class EnergyMarketModel(Model):
         self.schedule.add(regulator)
         self.market_agents['regulator'] = regulator
         
+        # Connect consumers and producers to utilities
+        consumers = [agent for agent in self.schedule.agents if isinstance(agent, ConsumerAgent)]
+        prosumers = [agent for agent in self.schedule.agents if isinstance(agent, ProsumerAgent)]
+        producers = [agent for agent in self.schedule.agents if isinstance(agent, EnergyProducerAgent)]
+        utilities = [agent for agent in self.schedule.agents if isinstance(agent, UtilityAgent)]
+        
+        # First, connect consumers to utilities
+        for consumer in consumers+prosumers:
+            # Randomly assign consumer to a utility
+            utility = np.random.choice(utilities)
+            utility.customer_base[consumer.unique_id] = {
+                'id': consumer.unique_id,
+                'avg_consumption': consumer.energy_needs,
+                'last_purchase': 0
+            }
+        
+        # Then, establish initial contracts between utilities and producers
+        for utility in utilities:
+            # Calculate utility's total energy needs from its customer base
+            total_energy_needs = sum(
+                customer['avg_consumption'] 
+                for customer in utility.customer_base.values()
+            )
+            
+            # Calculate how much energy we need to contract for
+            remaining_needs = total_energy_needs
+            
+            # Try to contract with multiple producers until needs are met
+            while remaining_needs > 0 and producers:
+                # Select a random producer that hasn't been contracted with yet
+                available_producers = [
+                    p for p in producers 
+                    if p.unique_id not in utility.producer_contracts
+                ]
+                
+                if not available_producers:
+                    break
+                    
+                producer = np.random.choice(available_producers)
+                
+                # Calculate how much capacity the producer has available
+                contracted_capacity = sum(
+                    contract.get('amount', 0) 
+                    for contract in producer.utility_contracts.values()
+                )
+                available_capacity = producer.max_capacity - contracted_capacity
+                
+                if available_capacity <= 0:
+                    continue
+                    
+                # Calculate contract amount (up to remaining needs or available capacity)
+                contract_amount = min(remaining_needs, available_capacity)
+                
+                # Create initial contract
+                contract = {
+                    'accepted': True,
+                    'utility_id': utility.unique_id,
+                    'producer_id': producer.unique_id,
+                    'amount': contract_amount,
+                    'price': producer.base_production_cost * (1 + 2*producer.min_profit_margin),
+                    'duration': 2,
+                    'remaining_duration': 2,  # Initial contract duration in steps'
+                    'is_renewable': producer.is_renewable()
+                }
+                
+                # Add contract to both utility and producer
+                utility.producer_contracts[producer.unique_id] = contract
+                producer.utility_contracts[utility.unique_id] = contract
+                
+                # Update remaining needs
+                remaining_needs -= contract_amount
+                
+                # If producer is fully contracted, remove from available producers
+                if contracted_capacity + contract_amount >= producer.max_capacity:
+                    producers.remove(producer)
+
     def get_agent(self, agent_id: str) -> Optional[Any]:
         """Get agent by ID.
         

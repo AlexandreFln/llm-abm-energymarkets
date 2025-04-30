@@ -162,10 +162,10 @@ class EnergyProducerAgent(EnergyMarketAgent):
         market_state = self.model.get_market_state()
         
         # Get LLM decision about production strategy
-        decision = await self.llm_decision_maker.get_producer_decision_async({
-            **state,
-            'market_state': market_state
-        })
+        decision = await self.llm_decision_maker.get_producer_decision_async(
+            state=state,
+            market_state=market_state,
+            )
         
         # Apply LLM decisions
         self.current_production = min(
