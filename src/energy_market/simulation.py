@@ -46,11 +46,12 @@ class EnergyMarketSimulation:
         self.output_dir = Path(output_dir) if output_dir else Path.cwd()
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
-    async def run_async(self, num_steps: int = 168) -> None:
+    async def run_async(self, num_steps: int = 10, logger=None) -> None:
         """Run simulation for specified number of steps asynchronously.
         
         Args:
             num_steps: Number of steps to run (default: 1 week of hourly steps)
+            logger: Optional logger instance
         """
         print(f"\nRunning simulation for {num_steps} steps...")
         start_time = time.time()
@@ -61,6 +62,10 @@ class EnergyMarketSimulation:
             
             # Execute model step asynchronously
             await self.model.step_async()
+            
+            # Log the step if logger is provided
+            if logger:
+                logger.log_step(self.model)
             
             # Show step timing
             step_time = time.time() - step_start
@@ -277,7 +282,7 @@ class EnergyMarketSimulation:
         self.plot_agent_resources()
         self.plot_agent_profits()
         
-    async def run_and_analyze(self, num_steps: int = 168, logger = None) -> None:
+    async def run_and_analyze(self, num_steps: int = 10, logger = None) -> None:
         """Run simulation and generate all analyses.
         
         Args:
@@ -285,12 +290,16 @@ class EnergyMarketSimulation:
             logger: Optional logger instance
         """
         print("Running simulation...")
-        await self.run_async(num_steps)
+        await self.run_async(num_steps, logger)
         
         print("Generating plots...")
         self.plot_all()
         
         print("Saving data...")
         self.save_data()
+        
+        # Save logs if logger is provided
+        if logger:
+            logger.save_logs()
         
         print("Simulation complete. Results saved to:", self.output_dir) 

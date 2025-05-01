@@ -202,7 +202,7 @@ Choose the best offer among the followings and score it on a scale of 0 to 100:
             Dict containing decision details
         """
         default_response = ProducerDecision(
-            production_level=state.get("max_capacity", 0) * 0.8,
+            production_level=state.get("max_production_capacity", 0) * 0.8,
             price=state.get("current_price", 100),
             accept_contracts=True,
             min_contract_duration=3,

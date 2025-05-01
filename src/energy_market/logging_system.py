@@ -77,8 +77,8 @@ class SimulationLogger:
             
         if isinstance(agent, (ProsumerAgent, EnergyProducerAgent)):
             agent_state.update({
-                "production": agent.production,
-                "max_capacity": agent.max_capacity,
+                "production": agent.current_production,
+                "max_production_capacity": agent.max_production_capacity,
                 "energy_stored": getattr(agent, 'energy_stored', 0),
             })
             
@@ -86,17 +86,16 @@ class SimulationLogger:
             agent_state.update({
                 "utility_type": agent.utility_type,
                 "renewable_quota": agent.renewable_quota,
-                "energy_purchased": agent.energy_purchased,
+                "energy_purchased": agent.spot_market_purchases,
             })
             
         return agent_state
     
-    def log_step(self, model: Any, agent_decisions: Dict[str, Dict[str, Any]]):
+    def log_step(self, model: Any):
         """Log a complete simulation step.
         
         Args:
             model: The EnergyMarketModel instance
-            agent_decisions: Dictionary mapping agent IDs to their decisions
         """
         step_log = {
             "market_conditions": self.log_market_conditions(model),
@@ -108,7 +107,6 @@ class SimulationLogger:
             agent_id = agent.unique_id
             step_log["agents"][agent_id] = {
                 "state": self.log_agent_state(agent),
-                "decisions": agent_decisions.get(agent_id, {})
             }
             
         self.step_logs.append(step_log)

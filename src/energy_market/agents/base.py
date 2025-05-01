@@ -2,6 +2,8 @@ from mesa import Agent
 import numpy as np
 from typing import Optional, Dict, Any
 from src.energy_market.utils.llm_decision import LLMDecisionMaker
+from src.energy_market.agents import ConsumerAgent
+from src.energy_market.agents import UtilityAgent
 
 class EnergyMarketAgent(Agent):
     """Base class for all agents in the energy market."""

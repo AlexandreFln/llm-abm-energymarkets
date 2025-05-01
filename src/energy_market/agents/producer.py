@@ -14,7 +14,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
                  persona: str,
                  production_type: str,
                  initial_resources: float = 10000.0,
-                 max_capacity: float = 1000.0,
+                 max_production_capacity: float = 1000.0,
                  base_production_cost: float = 30.0,
                  maintenance_cost_rate: float = 0.02,
                  upgrade_cost: float = 5000.0,
@@ -28,7 +28,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
             persona: The agent's personality/behavior type
             production_type: Type of energy production facility
             initial_resources: Starting monetary resources
-            max_capacity: Maximum production capacity per step
+            max_production_capacity: Maximum production capacity per step
             base_production_cost: Base cost per unit of energy produced
             maintenance_cost_rate: Maintenance cost as fraction of capacity
             upgrade_cost: Cost to upgrade production capacity
@@ -43,7 +43,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
             )
             
         self.production_type = production_type
-        self.max_capacity = max_capacity
+        self.max_production_capacity = max_production_capacity
         self.base_production_cost = base_production_cost
         self.maintenance_cost_rate = maintenance_cost_rate
         self.upgrade_cost = upgrade_cost
@@ -51,7 +51,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
         self.min_profit_margin = min_profit_margin
         
         # Dynamic state variables
-        self.current_production = max_capacity * 0.8  # Start at 80% of capacity
+        self.current_production = max_production_capacity * 0.8  # Start at 80% of capacity
         self.current_price = base_production_cost * (1 + min_profit_margin * 2)
         self.utility_contracts: Dict[str, Dict[str, Any]] = {}
         self.production_efficiency = 1.0
@@ -76,7 +76,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
             Dict containing contract terms
         """
         # Check if we can fulfill the contract
-        available_capacity = self.max_capacity
+        available_capacity = self.max_production_capacity
         for contract in self.utility_contracts.values():
             available_capacity -= contract['amount']
             
@@ -84,7 +84,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
             return {'accepted': False, 'reason': 'Insufficient capacity'}
             
         # Calculate contract price with volume discount
-        volume_discount = min(0.1, amount / self.max_capacity * 0.2)
+        volume_discount = min(0.1, amount / self.max_production_capacity * 0.2)
         contract_price = self.current_price * (1 - volume_discount)
         
         # Create contract terms
@@ -126,7 +126,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
         
     def maintain_facility(self) -> None:
         """Perform facility maintenance and update efficiency."""
-        maintenance_cost = self.max_capacity * self.maintenance_cost_rate
+        maintenance_cost = self.max_production_capacity * self.maintenance_cost_rate
         
         # Record maintenance cost as a transaction and update resources
         self.record_transaction('cost', 0, maintenance_cost, 'maintenance')
@@ -146,7 +146,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
             'transaction_history': self.transaction_history[-5:] if self.transaction_history else [],
             'persona': self.persona,
             'production_type': self.production_type,
-            'max_capacity': self.max_capacity,
+            'max_production_capacity': self.max_production_capacity,
             'current_production': self.current_production,
             'current_price': self.current_price,
             'production_efficiency': self.production_efficiency,
@@ -176,7 +176,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
         # Apply LLM decisions
         self.current_production = min(
             decision.production_level,
-            self.max_capacity
+            self.max_production_capacity
         )
         self.current_price = decision.price
         
@@ -187,5 +187,5 @@ class EnergyProducerAgent(EnergyMarketAgent):
         # Consider capacity upgrade based on LLM decision
         if decision.consider_upgrade:
             print(f"    {self.unique_id} upgrades its production capacity of {self.upgrade_capacity_increase} for a cost of {self.upgrade_cost}")
-            self.max_capacity += self.upgrade_capacity_increase
+            self.max_production_capacity += self.upgrade_capacity_increase
             self.update_resources(-self.upgrade_cost)

@@ -112,7 +112,7 @@ class EnergyMarketModel(Model):
                 persona=str(np.random.choice(personas, 1)[0]),
                 production_type=np.random.choice(["solar", "wind", "hydro", "coal", "gas"]),
                 initial_resources=np.random.randint(10000, 30000),
-                max_capacity=np.random.randint(400, 600),
+                max_production_capacity=np.random.randint(400, 600),
                 base_production_cost=np.random.randint(40, 60),
                 maintenance_cost_rate=0.02,
                 upgrade_cost=5000.0,
@@ -186,7 +186,7 @@ class EnergyMarketModel(Model):
                     contract.get('amount', 0) 
                     for contract in producer.utility_contracts.values()
                 )
-                available_capacity = producer.max_capacity - contracted_capacity
+                available_capacity = producer.max_production_capacity - contracted_capacity
                 if available_capacity <= 0:
                     continue
                 # Calculate contract amount (up to remaining needs or available capacity)
@@ -212,7 +212,7 @@ class EnergyMarketModel(Model):
                 remaining_needs -= contract_amount
                 
                 # If producer is fully contracted, remove from available producers
-                if contracted_capacity + contract_amount >= producer.max_capacity:
+                if contracted_capacity + contract_amount >= producer.max_production_capacity:
                     producers.remove(producer)
 
     def get_agent(self, agent_id: str) -> Optional[Any]:
@@ -305,11 +305,11 @@ class EnergyMarketModel(Model):
         
         # Calculate market concentration using Herfindahl-Hirschman Index (HHI)
         total_capacity = sum(
-            producer.max_capacity
+            producer.max_production_capacity
             for producer in self.market_agents['producers'].values()
         )
         market_shares = [
-            (producer.max_capacity / total_capacity) ** 2
+            (producer.max_production_capacity / total_capacity) ** 2
             for producer in self.market_agents['producers'].values()
         ] if total_capacity > 0 else []
         market_concentration = sum(market_shares)
@@ -317,7 +317,7 @@ class EnergyMarketModel(Model):
         # Get available producers for contracting
         available_producers = {
             producer.unique_id: {
-                'capacity': producer.max_capacity,
+                'capacity': producer.max_production_capacity,
                 'price': producer.current_price,
                 'is_renewable': producer.is_renewable()
             }
@@ -360,7 +360,7 @@ class EnergyMarketModel(Model):
             'available_producers': available_producers,
             'producers': {
                 p.unique_id: {
-                    'capacity': p.max_capacity,
+                    'capacity': p.max_production_capacity,
                     'price': p.current_price,
                     'production': p.current_production
                 }
