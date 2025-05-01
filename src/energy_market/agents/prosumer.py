@@ -61,7 +61,7 @@ class ProsumerAgent(ConsumerAgent):
             # Simulate solar production with daily and weather variations
             time_of_day = (self.model.schedule.time % 24) / 24.0  # Day time between 0 and 1
             day_factor = np.sin(np.pi * time_of_day) ** 2  # Peak at noon --> sinus function simulates sun movement
-            weather_factor = np.random.uniform(0.6, 1.0)  # Random weather impact
+            weather_factor = np.random.uniform(0.7, 1.0)  # Random weather impact
             production = self.max_production_capacity * day_factor * weather_factor
         elif self.production_type == "wind":
             # Simulate wind production with more variability
@@ -74,11 +74,11 @@ class ProsumerAgent(ConsumerAgent):
             
         return max(0, production)
         
-    #TODO: remove maintenance costs ?
     def pay_maintenance(self) -> None:
         """Pay maintenance costs based on capacity."""
         maintenance_cost = self.max_production_capacity * self.maintenance_cost_rate
-        self.update_resources(-maintenance_cost)
+        # Record maintenance cost as a transaction and update resources
+        self.record_transaction('cost', 0, maintenance_cost, 'maintenance')
         
     def get_state(self) -> Dict[str, Any]:
         """Get the current state of the prosumer."""
@@ -100,7 +100,7 @@ class ProsumerAgent(ConsumerAgent):
         """Execute one step of the prosumer agent."""
         # Calculate production and pay maintenance
         self.current_production = self.calculate_production()
-        self.pay_maintenance()
+        self.pay_maintenance()  #TODO DEBUG: check resources vs initial_resources
         
         # Get current state
         state = self.get_state()
@@ -108,13 +108,12 @@ class ProsumerAgent(ConsumerAgent):
 
         # Get LLM decision about energy management strategy
         decision = await self.llm_decision_maker.get_prosumer_decision_async(
-            state,
-            market_state,
+            state=state,
+            market_state=market_state,
             )
         
         # Apply LLM decisions
         energy_needed = self.energy_needs
-        
         # Use stored energy based on LLM decision
         energy_from_storage = min(
             decision.use_storage,
@@ -122,7 +121,6 @@ class ProsumerAgent(ConsumerAgent):
         )
         energy_needed -= energy_from_storage
         self.energy_stored -= energy_from_storage
-        
         # Use current production
         energy_from_production = min(energy_needed, self.current_production)
         energy_needed -= energy_from_production
@@ -137,7 +135,11 @@ class ProsumerAgent(ConsumerAgent):
             )
             self.energy_stored += amount_to_store
             remaining_production -= amount_to_store
-            
+        
+        else:
+            # Still some energy needed to supply
+            await super().step_async()
+
         # Sell remaining production based on LLM decision
         if remaining_production > 0:
             self.selling_price = decision.selling_price
@@ -152,4 +154,4 @@ class ProsumerAgent(ConsumerAgent):
         # Consider capacity upgrade based on LLM decision
         if decision.consider_upgrade:
             self.max_production_capacity += self.upgrade_capacity_increase
-            self.resources -= self.upgrade_cost
+            self.update_resources(-self.upgrade_cost)

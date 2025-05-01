@@ -46,8 +46,6 @@ class EnergyMarketModel(Model):
         
         # Initialize schedule
         self.schedule = RandomActivation(self)
-        # self.schedule = SimultaneousActivation(self)
-
         
         # Initialize agent storage
         self.market_agents: Dict[str, Dict[str, Any]] = {
@@ -83,9 +81,9 @@ class EnergyMarketModel(Model):
             agent = ConsumerAgent(
                 unique_id=f"consumer_{i}",
                 model=self,
-                persona=str(np.random.choice(personas, 1)[0]),
+                persona=str(np.random.choice(personas)[0]),
                 initial_resources=np.random.randint(1000, 2000),
-                energy_needs=100.0 * np.random.random()
+                energy_needs=np.random.randint(80, 150),
             )
             self.schedule.add(agent)
             self.market_agents['consumers'][agent.unique_id] = agent
@@ -95,12 +93,12 @@ class EnergyMarketModel(Model):
             agent = ProsumerAgent(
                 unique_id=f"prosumer_{i}",
                 model=self,
-                persona=str(np.random.choice(personas, 1)[0]),
+                persona=str(np.random.choice(personas)[0]),
                 production_type="solar",  # or randomly choose between solar/wind
                 initial_resources=np.random.randint(1000, 2000),
-                energy_needs=50.0 * np.random.random(),
-                max_production_capacity=200.0 * np.random.random(),
-                storage_capacity=100.0 * np.random.random(),
+                energy_needs=np.random.randint(80, 150),
+                max_production_capacity=np.random.randint(50, 100),
+                storage_capacity=np.random.randint(10, 50),
                 green_energy_preference=0.8 * np.random.random()
             )
             self.schedule.add(agent)
@@ -161,7 +159,7 @@ class EnergyMarketModel(Model):
             utility.customer_base[consumer.unique_id] = {
                 'id': consumer.unique_id,
                 'avg_consumption': consumer.energy_needs,
-                'last_purchase': 0
+                'last_purchase': 0,
             }
         
         # Then, establish initial contracts between utilities and producers
@@ -171,10 +169,8 @@ class EnergyMarketModel(Model):
                 customer['avg_consumption'] 
                 for customer in utility.customer_base.values()
             )
-            
             # Calculate how much energy we need to contract for
             remaining_needs = total_energy_needs
-            
             # Try to contract with multiple producers until needs are met
             while remaining_needs > 0 and producers:
                 # Select a random producer that hasn't been contracted with yet
@@ -182,22 +178,17 @@ class EnergyMarketModel(Model):
                     p for p in producers 
                     if p.unique_id not in utility.producer_contracts
                 ]
-                
                 if not available_producers:
-                    break
-                    
+                    break   
                 producer = np.random.choice(available_producers)
-                
                 # Calculate how much capacity the producer has available
                 contracted_capacity = sum(
                     contract.get('amount', 0) 
                     for contract in producer.utility_contracts.values()
                 )
                 available_capacity = producer.max_capacity - contracted_capacity
-                
                 if available_capacity <= 0:
                     continue
-                    
                 # Calculate contract amount (up to remaining needs or available capacity)
                 contract_amount = min(remaining_needs, available_capacity)
                 
@@ -397,11 +388,18 @@ class EnergyMarketModel(Model):
         market_state = self.get_market_state()
         print(f"  Market state: Price={market_state['average_price']:.2f}, Supply={market_state['total_supply']:.2f}, Demand={market_state['total_demand']:.2f}")
         
-        # Run all agent steps in parallel and wait for completion
-        tasks = []
-        for agent in self.schedule.agents:
-            tasks.append(agent.step_async())
+        # Store initial resources for each agent
+        initial_resources = {agent.unique_id: agent.resources for agent in self.schedule.agents}
+        
+        # Create and gather all tasks
+        tasks = [agent.step_async() for agent in self.schedule.agents]
         await asyncio.gather(*tasks)
+        
+        # Calculate profit after all tasks are completed
+        for agent in self.schedule.agents:
+            profit = agent.resources - initial_resources[agent.unique_id]
+            agent.profit += profit
+            print(f"    {agent.unique_id} made a profit of {profit}")
         
         # Collect data
         print("  Collecting data...")

@@ -62,55 +62,44 @@ class ConsumerAgent(EnergyMarketAgent):
             
         best_offer = decision['best_offer']
         seller_id = best_offer.get('seller_id')
-        amount = best_offer.get('amount', 0)
+        amount = min(best_offer.get('amount', 0), self.energy_needs)
         price = best_offer.get('price', 0)
         
         if not seller_id or amount <= 0 or price <= 0:
             return
             
-        # Calculate total cost
-        total_cost = amount * price
-        
-        # Check if agent has enough resources
-        if total_cost > self.resources:
-            # Adjust amount to what agent can afford
+        # Calculate total cost and ensure agent has enough resources for amount contracted
+        if amount * price > self.resources:
             amount = self.resources / price
-            total_cost = amount * price
             
-        # Execute transaction
         if amount > 0:
-            self.model.execute_transaction(
-                buyer_id=self.unique_id,
-                seller_id=seller_id,
-                amount=amount,
-                price=price
-            )
-            
-            # Update agent state
-            self.update_resources(-total_cost)
-            self.current_consumption = amount
-            self.energy_price = price
-            
-            # Record transaction
+            # Record and execute transaction
             self.record_transaction(
                 transaction_type='buy',
                 amount=amount,
                 price=price,
                 counterparty_id=seller_id
-            ) 
+                ) 
+            
+            # Update agent state
+            self.current_consumption = amount
+            self.energy_price = price
+            
             
     async def step_async(self) -> None:
         """Execute one step of the consumer agent's behavior asynchronously."""
+        # initial_resources = self.resources
         # Get available offers from the market
         available_offers = self.model.get_available_offers()
-        
         # Get agent's state for decision making
         state = self._get_state()
-        
         # Make decision using LLM asynchronously
         decision = await self.llm_decision_maker.get_consumer_decision_async(
             state, available_offers
         )
-        
         # Execute decision
-        self._execute_decision(decision)
+        self._execute_decision(decision) #TODO DEBUG: check offer - amount - price
+
+        # profit = self.resources - initial_resources
+        # self.profit += profit
+        # print(f"    {self.unique_id} made a profit of {profit}")

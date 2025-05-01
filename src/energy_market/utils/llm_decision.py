@@ -157,8 +157,7 @@ class LLMDecisionMaker:
 {self._format_state_for_prompt(state)}
 </current_state>
 
-Among the following available offers, choose the best offer and score it on a scale of 0 to 100.
-Available offers:
+Choose the best offer among the followings and score it on a scale of 0 to 100:
 {available_offers}
 """
         return await self._safe_llm_call_async(prompt, default_response, "consumer")
@@ -180,7 +179,7 @@ Available offers:
             consider_upgrade=False
         )
         
-        prompt = f"""Decide how to manage your energy production and storage given the following informations::
+        prompt = f"""Decide how to manage your energy usage, production and storage given the following informations::
 -Your current state:
 <current_state>
 {self._format_state_for_prompt(state)}

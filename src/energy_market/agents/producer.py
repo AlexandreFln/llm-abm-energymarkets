@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 import numpy as np
 
 from .base import EnergyMarketAgent
@@ -38,7 +38,9 @@ class EnergyProducerAgent(EnergyMarketAgent):
         super().__init__(unique_id, model, persona, initial_resources)
         
         if production_type not in self.PRODUCTION_TYPES:
-            raise ValueError(f"Invalid production type. Must be one of: {self.PRODUCTION_TYPES}")
+            raise ValueError(
+                f"Invalid production type. Must be one of: {self.PRODUCTION_TYPES}"
+            )
             
         self.production_type = production_type
         self.max_capacity = max_capacity
@@ -53,13 +55,16 @@ class EnergyProducerAgent(EnergyMarketAgent):
         self.current_price = base_production_cost * (1 + min_profit_margin * 2)
         self.utility_contracts: Dict[str, Dict[str, Any]] = {}
         self.production_efficiency = 1.0
+        self.min_contract_duration = 3
         
     def is_renewable(self) -> bool:
         """Check if the production type is renewable."""
         return self.production_type in ["solar", "wind", "hydro"]
         
-    # TODO: use LLM decision making here
-    def negotiate_contract(self, utility_id: str, amount: float, duration: int) -> Dict[str, Any]:
+    def negotiate_contract(self, 
+                         utility_id: str, 
+                         amount: float, 
+                         duration: int) -> Dict[str, Any]:
         """Negotiate a contract with a utility.
         
         Args:
@@ -79,7 +84,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
             return {'accepted': False, 'reason': 'Insufficient capacity'}
             
         # Calculate contract price with volume discount
-        volume_discount = min(0.1, amount / self.max_capacity * 0.2)  # Up to 10% discount
+        volume_discount = min(0.1, amount / self.max_capacity * 0.2)
         contract_price = self.current_price * (1 - volume_discount)
         
         # Create contract terms
@@ -109,9 +114,8 @@ class EnergyProducerAgent(EnergyMarketAgent):
             amount = contract['amount']
             price = contract['price']
             
-            # Record transaction
-            self.record_transaction('sell', amount, price, utility_id)
-            self.update_resources(amount * price)
+            # Record transaction and update resources
+            self.record_transaction('sell', amount, price - self.base_production_cost, utility_id)
             
             # Update contract duration
             contract['remaining_duration'] -= 1
@@ -123,7 +127,9 @@ class EnergyProducerAgent(EnergyMarketAgent):
     def maintain_facility(self) -> None:
         """Perform facility maintenance and update efficiency."""
         maintenance_cost = self.max_capacity * self.maintenance_cost_rate
-        self.update_resources(-maintenance_cost)
+        
+        # Record maintenance cost as a transaction and update resources
+        self.record_transaction('cost', 0, maintenance_cost, 'maintenance')
         
         # Random events can affect efficiency
         event_chance = np.random.random()
@@ -148,7 +154,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
             'is_renewable': self.is_renewable()
         }
         return state
-        
+    
     async def step_async(self) -> None:
         """Execute one step of the producer agent."""
         # Maintain facility and update efficiency
@@ -165,7 +171,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
         decision = await self.llm_decision_maker.get_producer_decision_async(
             state=state,
             market_state=market_state,
-            )
+        )
         
         # Apply LLM decisions
         self.current_production = min(
@@ -180,5 +186,6 @@ class EnergyProducerAgent(EnergyMarketAgent):
         
         # Consider capacity upgrade based on LLM decision
         if decision.consider_upgrade:
+            print(f"    {self.unique_id} upgrades its production capacity of {self.upgrade_capacity_increase} for a cost of {self.upgrade_cost}")
             self.max_capacity += self.upgrade_capacity_increase
-            self.resources -= self.upgrade_cost
+            self.update_resources(-self.upgrade_cost)

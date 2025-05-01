@@ -153,6 +153,8 @@ class UtilityAgent(EnergyMarketAgent):
             score = self.evaluate_producer_contract(contract)
             if score > 0:
                 self.producer_contracts[producer_id] = contract
+                # Record the purchase transaction
+                self.record_transaction('buy', contract['amount'], contract['price'], producer_id)
                 total_contracted += contract['amount']
                 if contract['is_renewable']:
                     renewable_contracted += contract['amount']
@@ -201,7 +203,7 @@ class UtilityAgent(EnergyMarketAgent):
         # Get current state
         state = self.get_state()
         market_state = self.model.get_market_state()
-        
+
         # Get LLM decision about utility strategy
         decision = await self.llm_decision_maker.get_utility_decision_async(
             state=state,
@@ -240,6 +242,6 @@ class UtilityAgent(EnergyMarketAgent):
         
         # Update customer base
         self.update_customer_base()
-        
+
         # Reset spot market purchases for new step
         self.spot_market_purchases = 0.0 

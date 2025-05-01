@@ -15,21 +15,21 @@ def parse_args():
     parser.add_argument(
         '--num-steps',
         type=int,
-        default=3,
+        default=4,
         help='Number of simulation steps (default: 168, one week of hourly steps)'
     )
     
     parser.add_argument(
         '--num-consumers',
         type=int,
-        default=3,
+        default=2,
         help='Number of consumer agents (default: 100)'
     )
     
     parser.add_argument(
         '--num-prosumers',
         type=int,
-        default=2,
+        default=1,
         help='Number of prosumer agents (default: 20)'
     )
     
