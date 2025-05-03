@@ -2,8 +2,6 @@ from mesa import Agent
 import numpy as np
 from typing import Optional, Dict, Any
 from src.energy_market.utils.llm_decision import LLMDecisionMaker
-from src.energy_market.agents import ConsumerAgent
-from src.energy_market.agents import UtilityAgent
 
 class EnergyMarketAgent(Agent):
     """Base class for all agents in the energy market."""
@@ -90,6 +88,8 @@ class EnergyMarketAgent(Agent):
             counterpart.resources += total_value
             transaction['counterparty'] = self.unique_id
             counterpart.transaction_history.append(transaction)
+            from src.energy_market.agents.consumer import ConsumerAgent
+            from src.energy_market.agents.utility import UtilityAgent
             if isinstance(self, ConsumerAgent) and isinstance(counterpart, UtilityAgent):
                 counterpart.customer_base[self.unique_id] = {
                     'id': self.unique_id,

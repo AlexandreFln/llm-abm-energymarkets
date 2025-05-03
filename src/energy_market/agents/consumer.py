@@ -1,6 +1,5 @@
 from typing import Dict, Any
-from .base import EnergyMarketAgent
-from src.energy_market.utils.llm_decision import LLMDecisionMaker
+from src.energy_market.agents.base import EnergyMarketAgent
 
 class ConsumerAgent(EnergyMarketAgent):
     """Agent representing an energy consumer in the market."""
@@ -57,13 +56,13 @@ class ConsumerAgent(EnergyMarketAgent):
         Args:
             decision: The decision made by the agent
         """
-        if not decision or 'best_offer' not in decision or not decision['best_offer']:
+        if not decision or not decision.best_offer:
             return
             
-        best_offer = decision['best_offer']
-        seller_id = best_offer.get('seller_id')
-        amount = min(best_offer.get('amount', 0), self.energy_needs)
-        price = best_offer.get('price', 0)
+        best_offer = decision.best_offer
+        seller_id = best_offer.seller_id
+        amount = min(best_offer.amount, self.energy_needs)
+        price = best_offer.price
         
         if not seller_id or amount <= 0 or price <= 0:
             return
@@ -79,7 +78,7 @@ class ConsumerAgent(EnergyMarketAgent):
                 amount=amount,
                 price=price,
                 counterparty_id=seller_id
-                ) 
+                )
             
             # Update agent state
             self.current_consumption = amount

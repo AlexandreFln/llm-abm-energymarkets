@@ -15,21 +15,21 @@ def parse_args():
     parser.add_argument(
         '--num-steps',
         type=int,
-        default=4,
+        default=5,
         help='Number of simulation steps (default: 168, one week of hourly steps)'
     )
     
     parser.add_argument(
         '--num-consumers',
         type=int,
-        default=2,
+        default=5,
         help='Number of consumer agents (default: 100)'
     )
     
     parser.add_argument(
         '--num-prosumers',
         type=int,
-        default=1,
+        default=2,
         help='Number of prosumer agents (default: 20)'
     )
     
@@ -116,7 +116,7 @@ def main():
         
         # Initialize logger with the output directory
         logger = SimulationLogger(base_dir=str(output_dir))
-        logger.start_new_run()
+        # logger.start_new_run()
         
         print("\nStarting simulation...")
         asyncio.run(simulation.run_and_analyze(args.num_steps, logger))

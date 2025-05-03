@@ -111,7 +111,7 @@ class EnergyMarketModel(Model):
                 model=self,
                 persona=str(np.random.choice(personas, 1)[0]),
                 production_type=np.random.choice(["solar", "wind", "hydro", "coal", "gas"]),
-                initial_resources=np.random.randint(10000, 30000),
+                initial_resources=np.random.randint(10000, 20000),
                 max_production_capacity=np.random.randint(400, 600),
                 base_production_cost=np.random.randint(40, 60),
                 maintenance_cost_rate=0.02,
@@ -148,12 +148,11 @@ class EnergyMarketModel(Model):
         
         # Connect consumers and producers to utilities
         consumers = [agent for agent in self.schedule.agents if isinstance(agent, ConsumerAgent)]
-        prosumers = [agent for agent in self.schedule.agents if isinstance(agent, ProsumerAgent)]
         producers = [agent for agent in self.schedule.agents if isinstance(agent, EnergyProducerAgent)]
         utilities = [agent for agent in self.schedule.agents if isinstance(agent, UtilityAgent)]
         
         # First, connect consumers to utilities
-        for consumer in consumers+prosumers:
+        for consumer in consumers:
             # Randomly assign consumer to a utility
             utility = np.random.choice(utilities)
             utility.customer_base[consumer.unique_id] = {
@@ -411,7 +410,7 @@ class EnergyMarketModel(Model):
         print("  Async step complete.\n") 
         
     def get_available_offers(self) -> List[Dict[str, Any]]:
-        """Get all available energy offers from producers and prosumers.
+        """Get all available energy offers from utilities and prosumers.
         
         Returns:
             List of available offers
@@ -419,21 +418,29 @@ class EnergyMarketModel(Model):
         offers = []
         
         for agent in self.schedule.agents:
-            if hasattr(agent, 'current_production') and agent.current_production > 0:
-                if isinstance(agent, EnergyProducerAgent):
-                    price = agent.base_production_cost * (1 + self.carbon_tax_rate / 100)
-                    if agent.is_renewable():
-                        price -= self.renewable_incentive
-                elif isinstance(agent, ProsumerAgent):
-                    price = self.initial_price * (1 + 0.2 * np.random.random())
+            if isinstance(agent, ProsumerAgent):
+                price = self.initial_price * (1 + 0.2 * np.random.random())
+                amount = max(0, agent.current_production - agent.energy_needs)
+                is_renewable = agent.production_type in ["solar", "wind", "hydro"]
+            elif isinstance(agent, UtilityAgent):
+                price = agent.current_selling_price
+                contracts = agent.producer_contracts.values()
+                amount = sum(contract['amount'] for contract in contracts if contract['accepted'] & (contract['duration']>0))
+                if len(contracts) > 0:
+                    is_renewable = (
+                        sum(
+                            contract.get('is_renewable', False) for contract in contracts if contract['accepted']
+                            ) / len(contracts)) > 2/3
                 else:
-                    continue
-                    
-                offers.append({
-                    'seller_id': agent.unique_id,
-                    'amount': agent.current_production,
-                    'price': price,
-                    'is_renewable': agent.is_renewable() if hasattr(agent, 'is_renewable') else agent.production_type in ["solar", "wind", "hydro"]
-                })
-                
+                    is_renewable = False
+            else:
+                continue
+
+            offers.append({
+                'seller_id': agent.unique_id,
+                'amount': amount,
+                'price': price,
+                'is_renewable': is_renewable,
+            })
+            
         return offers

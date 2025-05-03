@@ -77,6 +77,7 @@ class SimulationLogger:
             
         if isinstance(agent, (ProsumerAgent, EnergyProducerAgent)):
             agent_state.update({
+                "production_type": agent.production_type,
                 "production": agent.current_production,
                 "max_production_capacity": agent.max_production_capacity,
                 "energy_stored": getattr(agent, 'energy_stored', 0),
@@ -84,7 +85,6 @@ class SimulationLogger:
             
         if isinstance(agent, UtilityAgent):
             agent_state.update({
-                "utility_type": agent.utility_type,
                 "renewable_quota": agent.renewable_quota,
                 "energy_purchased": agent.spot_market_purchases,
             })

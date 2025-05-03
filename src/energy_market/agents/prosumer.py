@@ -60,6 +60,11 @@ class ProsumerAgent(ConsumerAgent):
         if self.production_type == "solar":
             # Simulate solar production with daily and weather variations
             time_of_day = (self.model.schedule.time % 24) / 24.0  # Day time between 0 and 1
+            #TODO: TEST TO DELETE
+            print(f"###########\nAgent {self.unique_id} at step {self.model.schedule.steps}")
+            print('Day Time :', time_of_day)
+            print("###########\n")
+            # END OF TEST
             day_factor = np.sin(np.pi * time_of_day) ** 2  # Peak at noon --> sinus function simulates sun movement
             weather_factor = np.random.uniform(0.7, 1.0)  # Random weather impact
             production = self.max_production_capacity * day_factor * weather_factor
@@ -100,7 +105,7 @@ class ProsumerAgent(ConsumerAgent):
         """Execute one step of the prosumer agent."""
         # Calculate production and pay maintenance
         self.current_production = self.calculate_production()
-        self.pay_maintenance()  #TODO DEBUG: check resources vs initial_resources
+        self.pay_maintenance()
         
         # Get current state
         state = self.get_state()

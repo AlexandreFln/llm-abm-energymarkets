@@ -46,7 +46,7 @@ class LLMDecisionMaker:
         self.regulator_parser = PydanticOutputParser(pydantic_object=RegulatorDecision)
         
         # Create a semaphore to limit concurrent LLM calls
-        self.semaphore = asyncio.Semaphore(10)  # Limit to 10 concurrent calls
+        self.semaphore = asyncio.Semaphore(15)  # Limit to 15 concurrent calls
         
     def _format_state_for_prompt(self, state: Dict[str, Any]) -> str:
         """Format agent state for prompt.
