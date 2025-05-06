@@ -102,7 +102,7 @@ class EnergyMarketSimulation:
         agent_data.index.names = ['Step', 'AgentID']
         return agent_data
     
-    def get_agenttype_data(self) -> Dict[str: pd.DataFrame]:
+    def get_agenttype_data(self) -> Dict[str, pd.DataFrame]:
         """Get agent-type level data from simulation.
         
         Returns:
@@ -153,7 +153,7 @@ class EnergyMarketSimulation:
         # Calculate agent type statistics
         agenttype_stats = {}
         for agent_type, agenttype_data in agenttype_dict.items():
-            agenttype_stats[agent_type] = {f'{col}_statistics': agenttype_data[agent_type].describe().loc[stats_list][col].to_dict() for col in model_data.columns}
+            agenttype_stats[agent_type] = {f'{col}_statistics': agenttype_data.describe().loc[stats_list][col].to_dict() for col in model_data.columns}
         
         return {
             'model_statistics': model_data_statistics,
