@@ -6,8 +6,6 @@ from .base import EnergyMarketAgent
 class UtilityAgent(EnergyMarketAgent):
     """Utility agent that buys from producers and sells to consumers."""
     
-    PERSONAS = ["eco_friendly", "profit_driven", "balanced"]
-    
     def __init__(self,
                  unique_id: str,
                  model: Any,
@@ -29,11 +27,11 @@ class UtilityAgent(EnergyMarketAgent):
             storage_capacity: Maximum energy storage capacity
             contract_duration: Default duration for producer contracts
         """
-        if persona not in self.PERSONAS:
-            raise ValueError(f"Invalid persona. Must be one of: {self.PERSONAS}")
             
         super().__init__(unique_id, model, persona, initial_resources)
         
+        if persona not in self.model.personas:
+            raise ValueError(f"Invalid persona. Must be one of: {self.model.personas}")
         # Configuration
         self.renewable_quota = renewable_quota
         self.min_profit_margin = min_profit_margin

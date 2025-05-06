@@ -25,7 +25,7 @@ class LLMDecisionMaker:
     
     def __init__(self, 
                  model_name: str = "llama3.2",
-                 timeout: float = 5.0,
+                #  timeout: float = 5.0,
                  ):
         """Initialize LLM decision maker.
         
@@ -46,7 +46,7 @@ class LLMDecisionMaker:
         self.regulator_parser = PydanticOutputParser(pydantic_object=RegulatorDecision)
         
         # Create a semaphore to limit concurrent LLM calls
-        self.semaphore = asyncio.Semaphore(15)  # Limit to 15 concurrent calls
+        self.semaphore = asyncio.Semaphore(30)  # Limit to 15 concurrent calls
         
     def _format_state_for_prompt(self, state: Dict[str, Any]) -> str:
         """Format agent state for prompt.
@@ -263,21 +263,19 @@ Choose the best offer among the followings and score it on a scale of 0 to 100:
         """
         default_response = RegulatorDecision(
             adjust_carbon_tax=0.0,
-            price_intervention=False,
             max_price_increase=state.get("max_price_increase", 0.2),
-            enforce_renewable_quota=True,
-            issue_warnings=[]
+            enforce_renewable_quota=False,
         )
         
         prompt = f"""Decide on regulatory actions given the following informations:
--Your current state:
-<current_state>
+-Your current state and past informations on high level state of the market :
+<current_state_and_past_market>
 {self._format_state_for_prompt(state)}
-</current_state>
+</current_state_and_past_market>
 
--Market state:
-<market_state>
+-Current market state:
+<current_market_state>
 {self._format_state_for_prompt(market_state)}
-</market_state>
+</current_market_state>
 """
         return await self._safe_llm_call_async(prompt, default_response, "regulator") 

@@ -50,6 +50,8 @@ class ProsumerAgent(ConsumerAgent):
         self.upgrade_capacity_increase = upgrade_capacity_increase
         
         # Dynamic state variables
+        self.energy_price = 0.0
+        self.current_consumption = 0.0
         self.current_production = 0.0
         self.energy_stored = 0.0
         self.selling_price = 100.0  # Initial selling price
@@ -83,7 +85,7 @@ class ProsumerAgent(ConsumerAgent):
         """Pay maintenance costs based on capacity."""
         maintenance_cost = self.max_production_capacity * self.maintenance_cost_rate
         # Record maintenance cost as a transaction and update resources
-        self.record_transaction('cost', 0, maintenance_cost, 'maintenance')
+        self.record_transaction('maintenance_cost', 0, maintenance_cost, self.unique_id)
         
     def get_state(self) -> Dict[str, Any]:
         """Get the current state of the prosumer."""
@@ -93,6 +95,8 @@ class ProsumerAgent(ConsumerAgent):
             'transaction_history': self.transaction_history[-5:] if self.transaction_history else [],
             'production_type': self.production_type,
             'max_production_capacity': self.max_production_capacity,
+            'energy_price': self.energy_price,
+            'current_consumption': self.current_consumption,
             'current_production': self.current_production,
             'energy_stored': self.energy_stored,
             'storage_capacity': self.storage_capacity,

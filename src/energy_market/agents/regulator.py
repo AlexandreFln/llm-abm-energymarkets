@@ -48,6 +48,8 @@ class RegulatorAgent(EnergyMarketAgent):
         
     def calculate_market_concentration(self, market_state: Dict[str, Any]) -> float:
         """Calculate Herfindahl-Hirschman Index (HHI) for market concentration.
+        The closer to 0, the more balanced is the market.
+        The closer to 1, the more the market is concentrated on a bunch of actors (oligopoly).
         
         Args:
             market_state: Current market state
@@ -89,7 +91,7 @@ class RegulatorAgent(EnergyMarketAgent):
                     'agent_id': producer_id,
                     'type': 'producer',
                     'price': producer['price'],
-                    'threshold': avg_price * (1 + self.max_price_increase)
+                    'threshold': avg_price * (1 + self.max_price_increase),
                 })
                 
         # Check utility prices
@@ -99,7 +101,7 @@ class RegulatorAgent(EnergyMarketAgent):
                     'agent_id': utility_id,
                     'type': 'utility',
                     'price': utility['selling_price'],
-                    'threshold': avg_price * (1 + self.max_price_increase)
+                    'threshold': avg_price * (1 + self.max_price_increase),
                 })
                 
         return violations
@@ -122,7 +124,7 @@ class RegulatorAgent(EnergyMarketAgent):
         # Ensure tax doesn't fall below base rate
         self.current_carbon_tax = max(self.base_carbon_tax, self.current_carbon_tax)
         
-    def issue_fine(self, agent_id: str, violation_type: str, amount: float) -> None:
+    def issue_fine(self, agent_id: str, violation_type: str, fine_price: float) -> None:
         """Issue a fine to an agent for market violations.
         
         Args:
@@ -132,8 +134,7 @@ class RegulatorAgent(EnergyMarketAgent):
         """
         agent = self.model.get_agent(agent_id)
         if agent:
-            agent.update_resources(-amount)
-            self.record_transaction('fine', amount, 1.0, agent_id)
+            agent.record_transaction('fine_'+violation_type, 0, fine_price, agent_id)
             
     def calculate_fine_amount(self, violation: Dict[str, Any]) -> float:
         """Calculate fine amount based on violation type and severity.
@@ -151,11 +152,11 @@ class RegulatorAgent(EnergyMarketAgent):
         elif violation['type'] == 'market_concentration':
             # Fine based on market concentration excess
             excess = violation['concentration'] - self.market_concentration_threshold
-            return excess * 10000.0
+            return excess * 5000.0 if self.persona == 'profit_driven' else excess * 10000.0
         elif violation['type'] == 'renewable_quota':
             # Fine based on shortfall from quota
             shortfall = self.min_renewable_ratio - violation['ratio']
-            return shortfall * 5000.0
+            return shortfall * 15000.0 if self.persona == 'eco_friendly' else shortfall * 5000.0
             
         return 0.0
         
@@ -173,7 +174,7 @@ class RegulatorAgent(EnergyMarketAgent):
             self.violations['price_gouging'].append({
                 'time': self.model.schedule.time,
                 'agent_id': violation['agent_id'],
-                'amount': fine_amount
+                'amount': fine_amount,
             })
             
         # Check market concentration
@@ -182,10 +183,10 @@ class RegulatorAgent(EnergyMarketAgent):
             # Find largest producers
             producers = sorted(
                 market_state['producers'].items(),
-                key=lambda x: x[1]['capacity'],
+                key=lambda x: x[1]['production'],
                 reverse=True
             )
-            for producer_id, info in producers[:2]:  # Fine top 2 contributors
+            for producer_id, _ in producers[:2]:  # Fine top 2 contributors
                 violation = {
                     'type': 'market_concentration',
                     'concentration': concentration
@@ -218,12 +219,16 @@ class RegulatorAgent(EnergyMarketAgent):
     def get_state(self) -> Dict[str, Any]:
         """Get the current state of the regulator."""
         state = {
+            'max_price_increase': self.max_price_increase,
             'current_carbon_tax': self.current_carbon_tax,
             'min_renewable_ratio': self.min_renewable_ratio,
             'market_concentration_threshold': self.market_concentration_threshold,
             'recent_violations': {
                 k: v[-5:] for k, v in self.violations.items()  # Last 5 violations of each type
-            }
+            },
+            'recent_prices': self.price_history[-5:],
+            'recent_renewable_ratios': self.renewable_ratio_history[-5:],
+            'recent_market_concentrations': self.market_concentration_history[-5:],
         }
         return state
         
@@ -235,8 +240,9 @@ class RegulatorAgent(EnergyMarketAgent):
         # Update market monitoring metrics
         self.price_history.append(market_state['average_price'])
         self.renewable_ratio_history.append(market_state['renewable_ratio'])
+        market_concentration = self.calculate_market_concentration(market_state)
         self.market_concentration_history.append(
-            self.calculate_market_concentration(market_state)
+            market_concentration
         )
         
         # Keep history limited to recent values
@@ -259,38 +265,11 @@ class RegulatorAgent(EnergyMarketAgent):
         # Adjust carbon tax
         self.current_carbon_tax *= (1 + decision.adjust_carbon_tax / 100)
         
-        # Handle price intervention
-        if decision.price_intervention:
-            self.max_price_increase = decision.max_price_increase
+        self.max_price_increase = decision.max_price_increase
             
         # Update renewable quota enforcement
-        self.min_renewable_ratio = decision.enforce_renewable_quota
+        if decision.enforce_renewable_quota:
+            self.min_renewable_ratio += 0.1
         
-        # Issue warnings based on LLM decision
-        for warning_type in decision.issue_warnings:
-            if warning_type == 'price_gouging':
-                violations = self.detect_price_gouging(market_state)
-                for violation in violations:
-                    self.violations['price_gouging'].append({
-                        'time': self.model.schedule.time,
-                        'agent_id': violation['agent_id'],
-                        'type': 'warning'
-                    })
-            elif warning_type == 'market_concentration':
-                concentration = self.calculate_market_concentration(market_state)
-                if concentration > self.market_concentration_threshold:
-                    self.violations['market_concentration'].append({
-                        'time': self.model.schedule.time,
-                        'concentration': concentration,
-                        'type': 'warning'
-                    })
-            elif warning_type == 'renewable_quota':
-                if market_state['renewable_ratio'] < self.min_renewable_ratio:
-                    self.violations['renewable_quota'].append({
-                        'time': self.model.schedule.time,
-                        'ratio': market_state['renewable_ratio'],
-                        'type': 'warning'
-                    })
-                    
         # Enforce regulations
         self.enforce_regulations(market_state) 

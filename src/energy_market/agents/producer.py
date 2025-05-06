@@ -1,12 +1,11 @@
 from typing import Dict, Any, Optional
 import numpy as np
 
-from .base import EnergyMarketAgent
+from src.energy_market.agents.base import EnergyMarketAgent
+from src.energy_market.constants import PRODUCTION_TYPES
 
 class EnergyProducerAgent(EnergyMarketAgent):
     """Energy producer agent that generates and sells energy to utilities."""
-    
-    PRODUCTION_TYPES = ["oil", "gas", "coal", "nuclear", "solar", "wind", "hydro"]
     
     def __init__(self,
                  unique_id: str,
@@ -37,9 +36,9 @@ class EnergyProducerAgent(EnergyMarketAgent):
         """
         super().__init__(unique_id, model, persona, initial_resources)
         
-        if production_type not in self.PRODUCTION_TYPES:
+        if production_type not in PRODUCTION_TYPES:
             raise ValueError(
-                f"Invalid production type. Must be one of: {self.PRODUCTION_TYPES}"
+                f"Invalid production type. Must be one of: {PRODUCTION_TYPES}"
             )
             
         self.production_type = production_type
@@ -101,21 +100,14 @@ class EnergyProducerAgent(EnergyMarketAgent):
         self.utility_contracts[utility_id] = contract
         return contract
         
-    def fulfill_contracts(self) -> None:
-        """Fulfill existing contracts and update their status."""
+    def manage_contracts(self) -> None:
+        """Manage existing contracts and update their status."""
         expired_contracts = []
         
         for utility_id, contract in self.utility_contracts.items():
             if contract['remaining_duration'] <= 0:
                 expired_contracts.append(utility_id)
                 continue
-                
-            # Deliver contracted amount
-            amount = contract['amount']
-            price = contract['price']
-            
-            # Record transaction and update resources
-            self.record_transaction('sell', amount, price - self.base_production_cost, utility_id)
             
             # Update contract duration
             contract['remaining_duration'] -= 1
@@ -129,7 +121,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
         maintenance_cost = self.max_production_capacity * self.maintenance_cost_rate
         
         # Record maintenance cost as a transaction and update resources
-        self.record_transaction('cost', 0, maintenance_cost, 'maintenance')
+        self.record_transaction('cost_maintenance', 0, maintenance_cost, self.unique_id)
         
         # Random events can affect efficiency
         event_chance = np.random.random()
@@ -161,7 +153,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
         self.maintain_facility()
         
         # Fulfill existing contracts
-        self.fulfill_contracts()
+        self.manage_contracts()
         
         # Get current state
         state = self.get_state()

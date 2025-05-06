@@ -1,15 +1,18 @@
 from typing import Dict, Any, List, Optional
 import numpy as np
 from mesa import Model
-from mesa.time import RandomActivation, SimultaneousActivation
+from mesa.time import RandomActivation
 from mesa.datacollection import DataCollector
 import asyncio
 
+from src.energy_market.agents.base import EnergyMarketAgent
 from src.energy_market.agents.consumer import ConsumerAgent
 from src.energy_market.agents.prosumer import ProsumerAgent
 from src.energy_market.agents.producer import EnergyProducerAgent
 from src.energy_market.agents.utility import UtilityAgent
 from src.energy_market.agents.regulator import RegulatorAgent
+
+from src.energy_market import constants as C
 
 class EnergyMarketModel(Model):
     """Energy market model with multiple agent types."""
@@ -43,6 +46,7 @@ class EnergyMarketModel(Model):
         self.initial_price = initial_price
         self.carbon_tax_rate = carbon_tax_rate
         self.renewable_incentive = renewable_incentive
+        self.personas = C.PERSONAS
         
         # Initialize schedule
         self.schedule = RandomActivation(self)
@@ -58,6 +62,22 @@ class EnergyMarketModel(Model):
         
         self._create_agents()
         
+        # Helper functions for safe division
+        def safe_division(numerator, denominator, default=0.0):
+            return numerator / denominator if denominator != 0 else default
+            
+        def get_buy_transactions(agent):
+            return [t for t in agent.transaction_history if t['type'] == 'buy']
+            
+        def get_sell_transactions(agent):
+            return [t for t in agent.transaction_history if t['type'] == 'sell']
+            
+        def sum_transaction_values(transactions):
+            return sum(t['total_value'] for t in transactions)
+            
+        def sum_transaction_amounts(transactions):
+            return sum(t['amount'] for t in transactions)
+        
         # Initialize data collection
         self.datacollector = DataCollector(
             model_reporters={
@@ -69,21 +89,78 @@ class EnergyMarketModel(Model):
             },
             agent_reporters={
                 "Resources": "resources",
-                "Profit": "profit"
-            }
+                "Profit": "profit",
+                "Transaction_History": "transaction_history",
+                "Transaction_Summary": EnergyMarketAgent.get_transaction_summary,
+            },
+            agenttype_reporters={
+                ConsumerAgent: {
+                    'Energy_Consumption': lambda c: c.current_consumption,
+                    'Energy_Cost': lambda c: sum_transaction_values(get_buy_transactions(c)),
+                },
+                ProsumerAgent: {
+                    'Energy_Consumption': lambda p: p.current_consumption,
+                    'Energy_Cost': lambda p: sum_transaction_values(get_buy_transactions(p)),
+                    'Energy_Production': lambda p: p.current_production,
+                    'Revenues': lambda p: sum_transaction_values(get_sell_transactions(p)),
+                    'Capacity_Utilization': lambda p: safe_division(
+                        p.current_production, 
+                        p.max_production_capacity
+                    ),
+                },
+                EnergyProducerAgent: {
+                    'Market_Share': lambda p: safe_division(
+                        sum_transaction_amounts(get_sell_transactions(p)),
+                        p.model.get_market_state()['total_demand']
+                    ),
+                    'Energy_Volume_Produced': lambda p: p.current_production,
+                    'Energy_Volume_Sold': lambda p: sum_transaction_amounts(get_sell_transactions(p)),
+                    'Revenues': lambda p: sum_transaction_values(get_sell_transactions(p)),
+                    'Operational_Margin': lambda p: 1 - safe_division(
+                        p.base_production_cost,
+                        p.current_price,
+                        default=1
+                    ),
+                    'Operational_Costs': lambda p: sum(t['price'] for t in p.transaction_history if t['type'] == 'cost'),
+                    'Capacity_Utilization': lambda p: safe_division(
+                        p.current_production,
+                        p.max_production_capacity
+                    ),
+                },
+                UtilityAgent: {
+                    'Profit_Margin': lambda u: 1 - safe_division(
+                        sum_transaction_values(get_buy_transactions(u)),
+                        sum_transaction_values(get_sell_transactions(u)),
+                        default=1
+                    ),
+                    'Energy_Procured': lambda u: sum_transaction_amounts(get_buy_transactions(u)),
+                    'Renewable_Energy_Procured_(%)': lambda u: safe_division(
+                        sum(t['amount'] for t in get_buy_transactions(u) if t['is_renewable']),
+                        sum_transaction_amounts(get_buy_transactions(u))
+                    ),
+                    'Energy_Procurement_Costs': lambda u: sum_transaction_values(get_buy_transactions(u)),
+                    'Revenues': lambda u: sum_transaction_values(get_sell_transactions(u)),
+                    'Energy_Distributed': lambda u: sum_transaction_amounts(get_sell_transactions(u)),
+                },
+                RegulatorAgent: {
+                    'Price_Intervention_Frequency': lambda r: len(r.violations['price_gouging']),
+                    'Oligopoly_Intervention_Frequency': lambda r: len(r.violations['market_concentration']),
+                    'Renewable_intervention_Frequency': lambda r: len(r.violations['renewable_quota']),
+                },
+            },
         )
         
     def _create_agents(self) -> None:
         """Create all agents in the model."""
-        personas = ["eco_friendly", "profit_driven", "balanced"]
         # Create consumers
         for i in range(self.num_consumers):
             agent = ConsumerAgent(
                 unique_id=f"consumer_{i}",
                 model=self,
-                persona=str(np.random.choice(personas)[0]),
+                persona=str(np.random.choice(C.PERSONAS)[0]),
                 initial_resources=np.random.randint(1000, 2000),
                 energy_needs=np.random.randint(80, 150),
+                renewable_preference=np.random.rand()
             )
             self.schedule.add(agent)
             self.market_agents['consumers'][agent.unique_id] = agent
@@ -93,13 +170,13 @@ class EnergyMarketModel(Model):
             agent = ProsumerAgent(
                 unique_id=f"prosumer_{i}",
                 model=self,
-                persona=str(np.random.choice(personas)[0]),
+                persona=str(np.random.choice(C.PERSONAS)[0]),
                 production_type="solar",  # or randomly choose between solar/wind
                 initial_resources=np.random.randint(1000, 2000),
                 energy_needs=np.random.randint(80, 150),
                 max_production_capacity=np.random.randint(50, 100),
                 storage_capacity=np.random.randint(10, 50),
-                green_energy_preference=0.8 * np.random.random()
+                green_energy_preference=np.random.rand()
             )
             self.schedule.add(agent)
             self.market_agents['prosumers'][agent.unique_id] = agent
@@ -109,14 +186,14 @@ class EnergyMarketModel(Model):
             agent = EnergyProducerAgent(
                 unique_id=f"producer_{i}",
                 model=self,
-                persona=str(np.random.choice(personas, 1)[0]),
-                production_type=np.random.choice(["solar", "wind", "hydro", "coal", "gas"]),
-                initial_resources=np.random.randint(10000, 20000),
-                max_production_capacity=np.random.randint(400, 600),
-                base_production_cost=np.random.randint(40, 60),
+                persona=str(np.random.choice(C.PERSONAS, 1)[0]),
+                production_type=np.random.choice(C.PRODUCTION_TYPES),
+                initial_resources=np.random.randint(20000, 50000),
+                max_production_capacity=np.random.randint(500, 1000),
+                base_production_cost=np.random.randint(20, 50),
                 maintenance_cost_rate=0.02,
                 upgrade_cost=5000.0,
-                upgrade_capacity_increase=200.0,
+                upgrade_capacity_increase=2000.0,
                 min_profit_margin=0.15
             )
             self.schedule.add(agent)
@@ -127,12 +204,12 @@ class EnergyMarketModel(Model):
             agent = UtilityAgent(
                 unique_id=f"utility_{i}",
                 model=self,
-                persona=str(np.random.choice(personas, 1)[0]),
-                initial_resources=np.random.randint(10000, 30000),
-                renewable_quota=0.2,
+                persona=str(np.random.choice(C.PERSONAS, 1)[0]),
+                initial_resources=np.random.randint(20000, 50000),
+                renewable_quota=0.4*np.random.random(),
                 min_profit_margin=0.1,
-                storage_capacity=np.random.randint(400, 600),
-                contract_duration=5,
+                storage_capacity=np.random.randint(400, 1500),
+                contract_duration=np.random.randint(2, 6),
             )
             self.schedule.add(agent)
             self.market_agents['utilities'][agent.unique_id] = agent
@@ -158,7 +235,9 @@ class EnergyMarketModel(Model):
             utility.customer_base[consumer.unique_id] = {
                 'id': consumer.unique_id,
                 'avg_consumption': consumer.energy_needs,
+                'amount': consumer.energy_needs, 
                 'last_purchase': 0,
+                'is_renewable': utility.renewable_quota > 0.5,
             }
         
         # Then, establish initial contracts between utilities and producers
@@ -361,7 +440,8 @@ class EnergyMarketModel(Model):
                 p.unique_id: {
                     'capacity': p.max_production_capacity,
                     'price': p.current_price,
-                    'production': p.current_production
+                    'production': p.current_production,
+                    'is_renewable': p.is_renewable()
                 }
                 for p in self.market_agents['producers'].values()
             },
@@ -371,7 +451,9 @@ class EnergyMarketModel(Model):
                     'renewable_ratio': sum(
                         1 for c in u.producer_contracts.values()
                         if c['is_renewable']
-                    ) / len(u.producer_contracts) if u.producer_contracts else 0
+                    ) / len(u.producer_contracts) if u.producer_contracts else 0,
+                    'energy_supply': sum(p['amount'] for p in u.producer_contracts.values() if p['accepted']),
+                    'energy_demand': sum(c['amount'] for c in u.customer_base.values()),
                 }
                 for u in self.market_agents['utilities'].values()
             },

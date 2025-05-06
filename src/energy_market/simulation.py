@@ -101,105 +101,21 @@ class EnergyMarketSimulation:
         agent_data = self.model.datacollector.get_agent_vars_dataframe()
         agent_data.index.names = ['Step', 'AgentID']
         return agent_data
+    
+    def get_agenttype_data(self) -> Dict[str: pd.DataFrame]:
+        """Get agent-type level data from simulation.
         
-    def plot_price_trends(self, save: bool = True) -> None:
-        """Plot energy price trends over time."""
-        model_data = self.get_model_data()
-        
-        plt.figure(figsize=(12, 6))
-        plt.plot(model_data.index, model_data['Average_Price'], label='Average Price')
-        plt.title('Energy Price Trends')
-        plt.xlabel('Time Step')
-        plt.ylabel('Price')
-        plt.legend()
-        plt.grid(True)
-        
-        if save:
-            plt.savefig(self.output_dir / 'price_trends.png')
-        plt.close()
-        
-    def plot_supply_demand(self, save: bool = True) -> None:
-        """Plot supply and demand balance over time."""
-        model_data = self.get_model_data()
-        
-        plt.figure(figsize=(12, 6))
-        plt.plot(model_data.index, model_data['Total_Production'], label='Supply')
-        plt.plot(model_data.index, model_data['Total_Demand'], label='Demand')
-        plt.title('Supply and Demand Balance')
-        plt.xlabel('Time Step')
-        plt.ylabel('Energy Units')
-        plt.legend()
-        plt.grid(True)
-        
-        if save:
-            plt.savefig(self.output_dir / 'supply_demand.png')
-        plt.close()
-        
-    def plot_renewable_ratio(self, save: bool = True) -> None:
-        """Plot renewable energy ratio over time."""
-        model_data = self.get_model_data()
-        
-        plt.figure(figsize=(12, 6))
-        plt.plot(model_data.index, model_data['Renewable_Ratio'])
-        plt.axhline(y=0.3, color='r', linestyle='--', label='Target Ratio')
-        plt.title('Renewable Energy Ratio')
-        plt.xlabel('Time Step')
-        plt.ylabel('Ratio')
-        plt.legend()
-        plt.grid(True)
-        
-        if save:
-            plt.savefig(self.output_dir / 'renewable_ratio.png')
-        plt.close()
-        
-    def plot_market_concentration(self, save: bool = True) -> None:
-        """Plot market concentration (HHI) over time."""
-        model_data = self.get_model_data()
-        
-        plt.figure(figsize=(12, 6))
-        plt.plot(model_data.index, model_data['Market_Concentration'])
-        plt.axhline(y=0.25, color='r', linestyle='--', label='High Concentration Threshold')
-        plt.title('Market Concentration (HHI)')
-        plt.xlabel('Time Step')
-        plt.ylabel('HHI')
-        plt.legend()
-        plt.grid(True)
-        
-        if save:
-            plt.savefig(self.output_dir / 'market_concentration.png')
-        plt.close()
-        
-    def plot_agent_resources(self, save: bool = True) -> None:
-        """Plot agent resources distribution over time."""
-        agent_data = self.get_agent_data()
-        resources = agent_data['Resources'].unstack()
-        
-        plt.figure(figsize=(12, 6))
-        sns.boxplot(data=resources)
-        plt.title('Distribution of Agent Resources')
-        plt.xlabel('Time Step')
-        plt.ylabel('Resources')
-        plt.xticks(rotation=45)
-        
-        if save:
-            plt.savefig(self.output_dir / 'agent_resources.png')
-        plt.close()
-        
-    def plot_agent_profits(self, save: bool = True) -> None:
-        """Plot agent profits distribution over time."""
-        agent_data = self.get_agent_data()
-        profits = agent_data['Profit'].unstack()
-        
-        plt.figure(figsize=(12, 6))
-        sns.boxplot(data=profits)
-        plt.title('Distribution of Agent Profits')
-        plt.xlabel('Time Step')
-        plt.ylabel('Profit')
-        plt.xticks(rotation=45)
-        
-        if save:
-            plt.savefig(self.output_dir / 'agent_profits.png')
-        plt.close()
+        Returns:
+            Dict containing agent-type dataframes
+        """
+        agenttype_dict = {}
+        for agent in self.model.agent_types:
+            name = agent.__name__.lower()
+            agent_df = self.model.datacollector.get_agenttype_vars_dataframe(agent)
+            agent_df.index.name = 'Step'
+            agenttype_dict[f"{name}_model_data"] = agent_df
+
+        return agenttype_dict
         
     def generate_report(self) -> Dict[str, Any]:
         """Generate summary report of simulation results.
@@ -209,18 +125,14 @@ class EnergyMarketSimulation:
         """
         model_data = self.get_model_data()
         agent_data = self.get_agent_data()
+        agenttype_dict = self.get_agenttype_data()
         
+        stats_list = ['mean', 'std', 'min', 'max']
         # Calculate summary statistics
-        price_stats = model_data['Average_Price'].describe()
-        renewable_stats = model_data['Renewable_Ratio'].describe()
-        
+        model_data['Supply_Demand_Ratio'] = model_data['Total_Production'] / model_data['Total_Demand']
+        model_data_statistics = {f'{col}_statistics': model_data.describe().loc[stats_list][col].to_dict() for col in model_data.columns}
         # Calculate market efficiency metrics
-        supply_demand_ratio = (
-            model_data['Total_Production'] / model_data['Total_Demand']
-        ).mean()
-        
         price_volatility = model_data['Average_Price'].std() / model_data['Average_Price'].mean()
-        
         # Calculate agent performance metrics
         final_resources = agent_data.xs(
             agent_data.index.get_level_values('Step').max(),
@@ -238,52 +150,39 @@ class EnergyMarketSimulation:
         profits_mean = final_profits.mean() if not final_profits.empty else 0
         profits_std = final_profits.std() if not final_profits.empty else 0
         
+        # Calculate agent type statistics
+        agenttype_stats = {}
+        for agent_type, agenttype_data in agenttype_dict.items():
+            agenttype_stats[agent_type] = {f'{col}_statistics': agenttype_data[agent_type].describe().loc[stats_list][col].to_dict() for col in model_data.columns}
+        
         return {
-            'price_statistics': {
-                'mean': price_stats['mean'],
-                'std': price_stats['std'],
-                'min': price_stats['min'],
-                'max': price_stats['max']
-            },
-            'renewable_statistics': {
-                'mean': renewable_stats['mean'],
-                'std': renewable_stats['std'],
-                'min': renewable_stats['min'],
-                'max': renewable_stats['max']
-            },
-            'market_efficiency': {
-                'supply_demand_ratio': supply_demand_ratio,
-                'price_volatility': price_volatility,
-                'avg_market_concentration': model_data['Market_Concentration'].mean()
-            },
+            'model_statistics': model_data_statistics,
+            'price_volatility': price_volatility,
             'agent_performance': {
                 'avg_final_resources': resources_mean,
                 'avg_final_profit': profits_mean,
                 'resource_inequality': resources_std / resources_mean if resources_mean != 0 else 0,
                 'profit_inequality': profits_std / profits_mean if profits_mean != 0 else 0
-            }
+            },
+            'agenttype_statistics': agenttype_stats
         }
         
     def save_data(self) -> None:
         """Save simulation data to CSV files."""
         model_data = self.get_model_data()
         agent_data = self.get_agent_data()
+        agenttype_dict = self.get_agenttype_data()
+        
         
         model_data.to_csv(self.output_dir / 'model_data.csv')
         agent_data.to_csv(self.output_dir / 'agent_data.csv')
+        for agent_type, agenttype_data in agenttype_dict.items():
+            agenttype_data.to_csv(self.output_dir / f'{agent_type}_data.csv')
         
         # Save summary report
         report = self.generate_report()
         pd.DataFrame(report).to_csv(self.output_dir / 'simulation_report.csv')
-        
-    def plot_all(self) -> None:
-        """Generate all plots."""
-        self.plot_price_trends()
-        self.plot_supply_demand()
-        self.plot_renewable_ratio()
-        self.plot_market_concentration()
-        self.plot_agent_resources()
-        self.plot_agent_profits()
+
         
     def calculate_advanced_kpis(self) -> Dict[str, Any]:
         """Calculate advanced KPIs for the simulation."""
@@ -548,14 +447,14 @@ class EnergyMarketSimulation:
             report += f"- Average Profit: {metrics['avg_profit']:.3f}\n"
             report += f"- Profit Volatility: {metrics['profit_volatility']:.3f}\n"
             
-            if metrics['market_participation'] is not None:
-                report += f"- Market Participation Rate: {metrics['market_participation']:.3f}\n"
+            # if metrics['market_participation'] is not None:
+            #     report += f"- Market Participation Rate: {metrics['market_participation']:.3f}\n"
             
-            if metrics['strategy_adaptability'] is not None:
-                report += f"- Strategy Changes per Step: {metrics['strategy_adaptability']:.3f}\n"
+            # if metrics['strategy_adaptability'] is not None:
+            #     report += f"- Strategy Changes per Step: {metrics['strategy_adaptability']:.3f}\n"
             
-            if metrics['resource_utilization'] is not None:
-                report += f"- Resource Utilization Rate: {metrics['resource_utilization']:.3f}\n"
+            # if metrics['resource_utilization'] is not None:
+            #     report += f"- Resource Utilization Rate: {metrics['resource_utilization']:.3f}\n"
 
         report += """
 ## Visualization
