@@ -23,8 +23,7 @@ class EnergyMarketModel(Model):
                  num_producers: int = 10,
                  num_utilities: int = 5,
                  initial_price: float = 100.0,
-                 carbon_tax_rate: float = 10.0,
-                 renewable_incentive: float = 5.0):
+                 carbon_tax_rate: float = 10.0,):
         """Initialize energy market model.
         
         Args:
@@ -34,7 +33,6 @@ class EnergyMarketModel(Model):
             num_utilities: Number of utility agents
             initial_price: Initial energy price
             carbon_tax_rate: Tax rate for carbon emissions
-            renewable_incentive: Incentive for renewable energy
         """
         super().__init__()
         
@@ -45,7 +43,6 @@ class EnergyMarketModel(Model):
         self.num_utilities = num_utilities
         self.initial_price = initial_price
         self.carbon_tax_rate = carbon_tax_rate
-        self.renewable_incentive = renewable_incentive
         self.personas = C.PERSONAS
         
         # Initialize schedule
@@ -157,7 +154,7 @@ class EnergyMarketModel(Model):
             agent = ConsumerAgent(
                 unique_id=f"consumer_{i}",
                 model=self,
-                persona="eco_friendly", #str(np.random.choice(C.PERSONAS)[0]),
+                persona="eco_friendly",  #str(np.random.choice(C.PERSONAS)[0]),
                 initial_resources=np.random.randint(1000, 2000),
                 energy_needs=np.random.randint(80, 150),
                 renewable_preference=np.random.rand()
@@ -186,7 +183,7 @@ class EnergyMarketModel(Model):
             agent = EnergyProducerAgent(
                 unique_id=f"producer_{i}",
                 model=self,
-                persona="eco_friendly", #str(np.random.choice(C.PERSONAS, 1)[0]),
+                persona="greedy", #str(np.random.choice(C.PERSONAS, 1)[0]),
                 production_type=np.random.choice(C.PRODUCTION_TYPES),
                 initial_resources=np.random.randint(20000, 50000),
                 max_production_capacity=np.random.randint(500, 1000),
@@ -204,7 +201,7 @@ class EnergyMarketModel(Model):
             agent = UtilityAgent(
                 unique_id=f"utility_{i}",
                 model=self,
-                persona="eco_friendly", #str(np.random.choice(C.PERSONAS, 1)[0]),
+                persona="greedy", #str(np.random.choice(C.PERSONAS, 1)[0]),
                 initial_resources=np.random.randint(20000, 50000),
                 renewable_quota=0.4*np.random.random(),
                 min_profit_margin=0.1,

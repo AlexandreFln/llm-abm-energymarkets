@@ -22,7 +22,6 @@ class EnergyMarketSimulation:
                  num_utilities: int = 5,
                  initial_price: float = 100.0,
                  carbon_tax_rate: float = 10.0,
-                 renewable_incentive: float = 5.0,
                  output_dir: Optional[str] = None):
         """Initialize simulation.
         
@@ -33,7 +32,6 @@ class EnergyMarketSimulation:
             num_utilities: Number of utility agents
             initial_price: Initial energy price
             carbon_tax_rate: Tax rate for carbon emissions
-            renewable_incentive: Incentive for renewable energy
             output_dir: Directory to save outputs (default: current directory)
         """
         self.model = EnergyMarketModel(
@@ -43,7 +41,6 @@ class EnergyMarketSimulation:
             num_utilities=num_utilities,
             initial_price=initial_price,
             carbon_tax_rate=carbon_tax_rate,
-            renewable_incentive=renewable_incentive
         )
         
         self.output_dir = Path(output_dir) if output_dir else Path.cwd()
