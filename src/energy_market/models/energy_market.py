@@ -85,6 +85,7 @@ class EnergyMarketModel(Model):
                 "Market_Concentration": lambda m: self.get_market_state()['market_concentration']
             },
             agent_reporters={
+                "Persona": "persona",
                 "Resources": "resources",
                 "Profit": "profit",
                 "Transaction_History": "transaction_history",
@@ -98,6 +99,7 @@ class EnergyMarketModel(Model):
                                                  ),
                 },
                 ProsumerAgent: {
+                    'Production_Type': 'production_type',
                     'Energy_Consumption': lambda p: p.current_consumption,
                     'Energy_Cost': lambda p: sum_transaction_values(get_buy_transactions(p)),
                     'Energy_Production': lambda p: p.current_production,
@@ -109,6 +111,7 @@ class EnergyMarketModel(Model):
                     ),
                 },
                 EnergyProducerAgent: {
+                    'Production_Type': 'production_type',
                     'Market_Share': lambda p: safe_division(
                         sum(t['amount'] for t in get_sell_transactions(p) if t['timestamp'] == p.model._steps),
                         p.model.get_market_state()['total_demand']
@@ -198,7 +201,7 @@ class EnergyMarketModel(Model):
             agent = EnergyProducerAgent(
                 unique_id=f"producer_{i}",
                 model=self,
-                persona="eco_friendly",  #str(np.random.choice(C.PERSONAS, 1)[0]),
+                persona=str(np.random.choice(C.PERSONAS, 1)[0]),
                 production_type='oil',  #np.random.choice(C.PRODUCTION_TYPES),
                 initial_resources=np.random.randint(20000, 50000),
                 max_production_capacity=np.random.randint(500, 1000),
