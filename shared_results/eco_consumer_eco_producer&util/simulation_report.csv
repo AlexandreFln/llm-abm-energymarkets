@@ -1,0 +1,12 @@
+,price_statistics,renewable_statistics,market_efficiency,agent_performance
+mean,78.415,1.0,,
+std,0.0,0.0,,
+min,78.415,1.0,,
+max,78.415,1.0,,
+supply_demand_ratio,,,1.7241379310344827,
+price_volatility,,,0.0,
+avg_market_concentration,,,1.0,
+avg_final_resources,,,,inf
+avg_final_profit,,,,-10025.399999999998
+resource_inequality,,,,
+profit_inequality,,,,-10.82938919064479
