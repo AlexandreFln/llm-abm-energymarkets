@@ -157,7 +157,7 @@ class EnergyMarketModel(Model):
             agent = ConsumerAgent(
                 unique_id=f"consumer_{i}",
                 model=self,
-                persona=str(np.random.choice(C.PERSONAS)[0]),
+                persona="eco_friendly", #str(np.random.choice(C.PERSONAS)[0]),
                 initial_resources=np.random.randint(1000, 2000),
                 energy_needs=np.random.randint(80, 150),
                 renewable_preference=np.random.rand()
@@ -170,7 +170,7 @@ class EnergyMarketModel(Model):
             agent = ProsumerAgent(
                 unique_id=f"prosumer_{i}",
                 model=self,
-                persona=str(np.random.choice(C.PERSONAS)[0]),
+                persona="eco_friendly", #str(np.random.choice(C.PERSONAS)[0]),
                 production_type="solar",  # or randomly choose between solar/wind
                 initial_resources=np.random.randint(1000, 2000),
                 energy_needs=np.random.randint(80, 150),
@@ -186,7 +186,7 @@ class EnergyMarketModel(Model):
             agent = EnergyProducerAgent(
                 unique_id=f"producer_{i}",
                 model=self,
-                persona=str(np.random.choice(C.PERSONAS, 1)[0]),
+                persona="eco_friendly", #str(np.random.choice(C.PERSONAS, 1)[0]),
                 production_type=np.random.choice(C.PRODUCTION_TYPES),
                 initial_resources=np.random.randint(20000, 50000),
                 max_production_capacity=np.random.randint(500, 1000),
@@ -204,7 +204,7 @@ class EnergyMarketModel(Model):
             agent = UtilityAgent(
                 unique_id=f"utility_{i}",
                 model=self,
-                persona=str(np.random.choice(C.PERSONAS, 1)[0]),
+                persona="eco_friendly", #str(np.random.choice(C.PERSONAS, 1)[0]),
                 initial_resources=np.random.randint(20000, 50000),
                 renewable_quota=0.4*np.random.random(),
                 min_profit_margin=0.1,
@@ -218,6 +218,7 @@ class EnergyMarketModel(Model):
         regulator = RegulatorAgent(
             unique_id="regulator",
             model=self,
+            persona="eco_friendly",
             base_carbon_tax=self.carbon_tax_rate
         )
         self.schedule.add(regulator)

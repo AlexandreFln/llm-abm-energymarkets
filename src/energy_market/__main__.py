@@ -64,7 +64,7 @@ def parse_args():
     parser.add_argument(
         '--renewable-incentive',
         type=float,
-        default=5.0,
+        default=10.0,
         help='Renewable energy incentive (default: 5.0)'
     )
     

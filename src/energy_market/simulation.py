@@ -110,11 +110,17 @@ class EnergyMarketSimulation:
         """
         agenttype_dict = {}
         for agent in self.model.agent_types:
-            name = agent.__name__.lower()
-            agent_df = self.model.datacollector.get_agenttype_vars_dataframe(agent)
-            agent_df.index.name = 'Step'
-            agenttype_dict[f"{name}_model_data"] = agent_df
-
+            try:
+                name = agent.__name__.lower()
+                agent_df = self.model.datacollector.get_agenttype_vars_dataframe(agent)
+                if not agent_df.empty:
+                    agent_df.index.name = 'Step'
+                    agenttype_dict[f"{name}_model_data"] = agent_df
+            except Exception as e:
+                print(
+                    f"Warning: Could not collect data for agent type "
+                    f"{agent.__name__}: {e}"
+                )
         return agenttype_dict
         
     def generate_report(self) -> Dict[str, Any]:
@@ -128,11 +134,28 @@ class EnergyMarketSimulation:
         agenttype_dict = self.get_agenttype_data()
         
         stats_list = ['mean', 'std', 'min', 'max']
-        # Calculate summary statistics
-        model_data['Supply_Demand_Ratio'] = model_data['Total_Production'] / model_data['Total_Demand']
+        
+        # Calculate summary statistics with error handling
+        try:
+            model_data['Supply_Demand_Ratio'] = (
+                model_data['Total_Production'] / 
+                model_data['Total_Demand'].replace(0, np.nan)
+            )
+        except Exception as e:
+            print(
+                f"Warning: Could not calculate Supply_Demand_Ratio: {e}"
+            )
+            model_data['Supply_Demand_Ratio'] = np.nan
+            
         model_data_statistics = {f'{col}_statistics': model_data.describe().loc[stats_list][col].to_dict() for col in model_data.columns}
-        # Calculate market efficiency metrics
-        price_volatility = model_data['Average_Price'].std() / model_data['Average_Price'].mean()
+        
+        # Calculate market efficiency metrics with error handling
+        try:
+            price_volatility = model_data['Average_Price'].std() / model_data['Average_Price'].mean()
+        except Exception as e:
+            print(f"Warning: Could not calculate price volatility: {e}")
+            price_volatility = np.nan
+        
         # Calculate agent performance metrics
         final_resources = agent_data.xs(
             agent_data.index.get_level_values('Step').max(),
@@ -153,7 +176,7 @@ class EnergyMarketSimulation:
         # Calculate agent type statistics
         agenttype_stats = {}
         for agent_type, agenttype_data in agenttype_dict.items():
-            agenttype_stats[agent_type] = {f'{col}_statistics': agenttype_data.describe().loc[stats_list][col].to_dict() for col in model_data.columns}
+            agenttype_stats[agent_type] = {f'{col}_statistics': agenttype_data.describe().loc[stats_list][col].to_dict() for col in agenttype_data.columns}
         
         return {
             'model_statistics': model_data_statistics,
@@ -188,7 +211,10 @@ class EnergyMarketSimulation:
         """Calculate advanced KPIs for the simulation."""
         model_data = self.get_model_data()
         agent_data = self.get_agent_data()
-        agent_data = agent_data.drop('regulator', level=1, axis=0)  # Drop regulator causing for which no KPIs are calculated
+        
+        # Safely drop regulator if it exists
+        if 'regulator' in agent_data.index.get_level_values('AgentID'):
+            agent_data = agent_data.drop('regulator', level=1, axis=0)
         
         # Market Efficiency KPIs
         price_volatility = np.std(model_data['Average_Price'])
