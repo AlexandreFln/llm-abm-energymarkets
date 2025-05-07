@@ -163,7 +163,7 @@ class UtilityAgent(EnergyMarketAgent):
         inactive_customers = []
         
         for customer_id, customer in self.customer_base.items():
-            if customer['last_purchase'] < self.model.schedule.time - 24:
+            if customer['last_purchase'] < self.model._steps - 2:
                 inactive_customers.append(customer_id)
             else:
                 # Update average consumption

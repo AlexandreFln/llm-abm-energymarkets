@@ -121,7 +121,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
         maintenance_cost = self.max_production_capacity * self.maintenance_cost_rate
         
         # Record maintenance cost as a transaction and update resources
-        self.record_transaction('cost_maintenance', 0, maintenance_cost, self.unique_id)
+        self.record_transaction('maintenance_cost', 0, maintenance_cost, self.unique_id)
         
         # Random events can affect efficiency
         event_chance = np.random.random()

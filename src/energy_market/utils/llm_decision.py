@@ -35,6 +35,7 @@ class LLMDecisionMaker:
         """
         self.llm = ChatOllama(
             model=model_name,
+            temperature=0.8,
             # timeout=timeout,
         )
         

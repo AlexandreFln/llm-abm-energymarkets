@@ -46,7 +46,7 @@ class EnergyMarketAgent(Agent):
         total_value = amount * price
         
         transaction = {
-            'timestamp': self.model.schedule.time,
+            'timestamp': self.model._steps,
             'type': transaction_type,
             'amount': amount,
             'price': price,
@@ -104,7 +104,7 @@ class EnergyMarketAgent(Agent):
                         'amount': amount,
                         'price': price,
                         'avg_consumption': self.energy_needs,
-                        'last_purchase': self.model.schedule.time,
+                        'last_purchase': self.model._steps,
                         'is_renewable': is_renewable,
                         }
                 if isinstance(counterpart, ProsumerAgent):

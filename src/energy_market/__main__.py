@@ -15,7 +15,7 @@ def parse_args():
     parser.add_argument(
         '--num-steps',
         type=int,
-        default=1,
+        default=3,
         help='Number of simulation steps (default: 168, one week of hourly steps)'
     )
     
@@ -62,13 +62,6 @@ def parse_args():
     )
     
     parser.add_argument(
-        '--renewable-incentive',
-        type=float,
-        default=10.0,
-        help='Renewable energy incentive (default: 5.0)'
-    )
-    
-    parser.add_argument(
         '--output-dir',
         type=str,
         default=None,
@@ -110,7 +103,6 @@ def main():
             num_utilities=args.num_utilities,
             initial_price=args.initial_price,
             carbon_tax_rate=args.carbon_tax,
-            renewable_incentive=args.renewable_incentive,
             output_dir=str(output_dir)
         )
         

@@ -43,7 +43,7 @@ class ConsumerAgent(EnergyMarketAgent):
             'energy_price': self.energy_price,
             'renewable_preference': self.renewable_preference,
             'transaction_history': self.transaction_history[-5:] if self.transaction_history else [],
-            'market_time': self.model.schedule.time,
+            'market_time': self.model._steps,
         }
         
     def _execute_decision(self, decision: Dict[str, Any]) -> None:

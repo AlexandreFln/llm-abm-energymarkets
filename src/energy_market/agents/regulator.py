@@ -172,7 +172,7 @@ class RegulatorAgent(EnergyMarketAgent):
             fine_amount = self.calculate_fine_amount(violation)
             self.issue_fine(violation['agent_id'], 'price_gouging', fine_amount)
             self.violations['price_gouging'].append({
-                'time': self.model.schedule.time,
+                'time': self.model._steps,
                 'agent_id': violation['agent_id'],
                 'amount': fine_amount,
             })
@@ -194,7 +194,7 @@ class RegulatorAgent(EnergyMarketAgent):
                 fine_amount = self.calculate_fine_amount(violation)
                 self.issue_fine(producer_id, 'market_concentration', fine_amount)
                 self.violations['market_concentration'].append({
-                    'time': self.model.schedule.time,
+                    'time': self.model._steps,
                     'agent_id': producer_id,
                     'amount': fine_amount
                 })
@@ -211,7 +211,7 @@ class RegulatorAgent(EnergyMarketAgent):
                     fine_amount = self.calculate_fine_amount(violation)
                     self.issue_fine(utility_id, 'renewable_quota', fine_amount)
                     self.violations['renewable_quota'].append({
-                        'time': self.model.schedule.time,
+                        'time': self.model._steps,
                         'agent_id': utility_id,
                         'amount': fine_amount
                     })
