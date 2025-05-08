@@ -173,7 +173,8 @@ class EnergyMarketSimulation:
         # Calculate agent type statistics
         agenttype_stats = {}
         for agent_type, agenttype_data in agenttype_dict.items():
-            agenttype_stats[agent_type] = {f'{col}_statistics': agenttype_data.describe().loc[stats_list][col].to_dict() for col in agenttype_data.columns}
+            columns = agenttype_data.describe().columns
+            agenttype_stats[agent_type] = {f'{col}_statistics': agenttype_data[col].describe().loc[stats_list].to_dict() for col in columns}
         
         return {
             'model_statistics': model_data_statistics,
@@ -197,7 +198,7 @@ class EnergyMarketSimulation:
         model_data.to_csv(self.output_dir / 'model_data.csv')
         agent_data.to_csv(self.output_dir / 'agent_data.csv')
         for agent_type, agenttype_data in agenttype_dict.items():
-            agenttype_data.to_csv(self.output_dir / f'{agent_type}_data.csv')
+            agenttype_data.to_csv(self.output_dir / f'{agent_type}.csv')
         
         # Save summary report
         report = self.generate_report()

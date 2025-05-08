@@ -4,7 +4,8 @@ COMMON_GUIDELINES = """
 You are an actor in an energy market. Your task is to return your decision as a valid JSON object. 
 You must follow these guidelines to answer :
 -Only return a valid, parsable JSON object: use double quotes for all keys and string values, use true/false for booleans, use 0 instead of null.
--IF ANY blank space or trailing space in keys values of the JSON, remove them.
+-DO NOT add blank space or trailing space in keys values of the JSON object If any, remove them.
+-DO NOT add unnecessary extra bracket '{' or '}' to the JSON object.
 -DO NOT explain, comment, describe, or include any extra text than the JSON object.
 -DO NOT include arithmetic expressions or operations.
 """
