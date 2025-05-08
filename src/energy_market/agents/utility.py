@@ -49,11 +49,9 @@ class UtilityAgent(EnergyMarketAgent):
         # Initialize prices based on persona
         self._initialize_pricing_strategy()
         
-    # TODO: use LLM decision making here
     def _initialize_pricing_strategy(self) -> None:
         """Initialize pricing strategy based on persona."""
-        market_state = self.model.get_market_state()
-        avg_market_price = market_state['average_price']
+        market_price = self.model.initial_price
         
         if self.persona == "eco_friendly":
             # Bias towards renewable energy, accept lower margins
@@ -64,7 +62,7 @@ class UtilityAgent(EnergyMarketAgent):
             self.min_profit_margin *= 1.2
             self.renewable_quota *= 0.8
             
-        self.current_selling_price = avg_market_price * (1 + self.min_profit_margin)
+        self.current_selling_price = market_price * (1 + self.min_profit_margin)
     
     def evaluate_producer_contract(self, contract: Dict[str, Any]) -> float:
         """Evaluate a proposed contract from a producer.

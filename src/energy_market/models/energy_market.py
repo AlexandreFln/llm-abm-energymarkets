@@ -359,15 +359,18 @@ class EnergyMarketModel(Model):
             prosumer.energy_needs
             for prosumer in self.market_agents['prosumers'].values()
         )
-        
         # Calculate average prices
         utility_prices = [
             utility.current_selling_price
             for utility in self.market_agents['utilities'].values()
         ]
+        producer_prices = [
+            producer.current_selling_price
+            for producer in self.market_agents['producers'].values()
+        ]
         avg_price = np.mean(utility_prices) if utility_prices else self.initial_price
 
-        spot_price = np.mean(utility.get_state()['spot_market_purchases'] for utility in self.market_agents['utilities'].values())
+        avg_spot_price = np.mean(producer_prices) if producer_prices else self.initial_price
         
         # Calculate renewable ratio
         total_production = sum(
@@ -382,7 +385,7 @@ class EnergyMarketModel(Model):
         renewable_ratio = (
             renewable_production / total_production if total_production > 0 else 0
         )
-        
+        energy_stored = sum(utility.energy_stored for utility in self.market_agents['utilities'].values())
         # Calculate market concentration using Herfindahl-Hirschman Index (HHI)
         total_capacity = sum(
             [producer.max_production_capacity
@@ -434,8 +437,10 @@ class EnergyMarketModel(Model):
         return {
             'total_supply': total_supply,
             'total_demand': total_demand,
+            'total_production': total_production,
+            'total_energy_stored': energy_stored,
             'average_price': avg_price,
-            'spot_price': spot_price,  # Spot market premium
+            'average_spot_price': avg_spot_price,  # Spot market premium
             'renewable_ratio': renewable_ratio,
             'market_concentration': market_concentration,
             'carbon_tax_rate': self.get_carbon_tax_rate(),
@@ -472,7 +477,7 @@ class EnergyMarketModel(Model):
 
         # Update market state
         market_state = self.get_market_state()
-        print(f"  Market state: Price={market_state['average_price']:.2f}, Supply={market_state['total_supply']:.2f}, Demand={market_state['total_demand']:.2f}")
+        print(f"  Market state: Price={market_state['average_price']:.2f}, Supply={market_state['total_supply']:.2f}, Demand={market_state['total_demand']:.2f}, Production={market_state['total_production']:.2f}, Energy Stored={market_state['total_energy_stored']:.2f}")
         
         # Store initial resources for each agent
         initial_resources = {agent.unique_id: agent.resources for agent in self.schedule.agents}
