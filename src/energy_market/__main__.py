@@ -15,7 +15,7 @@ def parse_args():
     parser.add_argument(
         '--num-steps',
         type=int,
-        default=3,
+        default=1,
         help='Number of simulation steps (default: 168, one week of hourly steps)'
     )
     

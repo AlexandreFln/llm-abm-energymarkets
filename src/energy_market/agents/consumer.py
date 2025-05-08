@@ -92,4 +92,4 @@ class ConsumerAgent(EnergyMarketAgent):
             state, available_offers
         )
         # Execute decision
-        self._execute_decision(decision) #TODO DEBUG: check offer - amount - price
+        self._execute_decision(decision)

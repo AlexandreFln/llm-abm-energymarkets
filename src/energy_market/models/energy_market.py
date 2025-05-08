@@ -349,8 +349,8 @@ class EnergyMarketModel(Model):
         """
         # Calculate total supply and demand
         total_supply = sum(
-            producer.current_production
-            for producer in self.market_agents['producers'].values()
+            sum(c.get('amount', 0) for c in utility.producer_contracts.values() if c['remaining_duration'] > 0)
+            for utility in self.market_agents['utilities'].values()
         )
         total_demand = sum(
             consumer.energy_needs
@@ -361,15 +361,13 @@ class EnergyMarketModel(Model):
         )
         
         # Calculate average prices
-        producer_prices = [
-            producer.current_price
-            for producer in self.market_agents['producers'].values()
-        ]
         utility_prices = [
             utility.current_selling_price
             for utility in self.market_agents['utilities'].values()
         ]
-        avg_price = np.mean(producer_prices + utility_prices) if producer_prices or utility_prices else self.initial_price
+        avg_price = np.mean(utility_prices) if utility_prices else self.initial_price
+
+        spot_price = np.mean(utility.get_state()['spot_market_purchases'] for utility in self.market_agents['utilities'].values())
         
         # Calculate renewable ratio
         total_production = sum(
@@ -387,8 +385,11 @@ class EnergyMarketModel(Model):
         
         # Calculate market concentration using Herfindahl-Hirschman Index (HHI)
         total_capacity = sum(
-            producer.max_production_capacity
-            for producer in self.market_agents['producers'].values()
+            [producer.max_production_capacity
+             for producer in self.market_agents['producers'].values()]
+            +
+            [prosumer.max_production_capacity
+             for prosumer in self.market_agents['prosumers'].values()]
         )
         market_shares = [
             (producer.max_production_capacity / total_capacity) ** 2
@@ -434,7 +435,7 @@ class EnergyMarketModel(Model):
             'total_supply': total_supply,
             'total_demand': total_demand,
             'average_price': avg_price,
-            'spot_price': avg_price * 1.1,  # Spot market premium
+            'spot_price': spot_price,  # Spot market premium
             'renewable_ratio': renewable_ratio,
             'market_concentration': market_concentration,
             'carbon_tax_rate': self.get_carbon_tax_rate(),
