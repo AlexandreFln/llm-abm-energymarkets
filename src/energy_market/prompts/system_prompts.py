@@ -15,11 +15,9 @@ CONSUMER_PROMPT = f"""{COMMON_GUIDELINES}
 Your are a consumer and your role is to purchase energy from utilities or prosumers to meet your energy needs.
 
 Your decision-making should be guided by:
-- Your energy needs
-- Your available resources/budget
-- Your price tolerance (maximum and minimum acceptable prices)
+- Your energy needs as top priority, i.e your supplier must provide you with sufficient energy amount given your needs
+- Your available resources/budget (i.e you must have enough resources to pays for your needs)
 - Your preference for renewable energy
-
 """
 
 PROSUMER_PROMPT = f"""{COMMON_GUIDELINES} 

@@ -15,8 +15,8 @@ class ProsumerAgent(ConsumerAgent):
                  max_production_capacity: float = 200.0,
                  storage_capacity: float = 300.0,
                  maintenance_cost_rate: float = 0.05,
-                 upgrade_cost: float = 1000.0,
-                 upgrade_capacity_increase: float = 50.0,
+                 upgrade_cost: float = 500.0,
+                 upgrade_capacity_increase: float = 8.0,
                  green_energy_preference: float = 0.7):
         """Initialize prosumer agent.
         

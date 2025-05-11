@@ -15,49 +15,49 @@ def parse_args():
     parser.add_argument(
         '--num-steps',
         type=int,
-        default=1,
+        default=5,
         help='Number of simulation steps (default: 168, one week of hourly steps)'
     )
     
     parser.add_argument(
         '--num-consumers',
         type=int,
-        default=1,
+        default=5,
         help='Number of consumer agents (default: 100)'
     )
     
     parser.add_argument(
         '--num-prosumers',
         type=int,
-        default=1,
+        default=5,
         help='Number of prosumer agents (default: 20)'
     )
     
     parser.add_argument(
         '--num-producers',
         type=int,
-        default=1,
+        default=3,
         help='Number of producer agents (default: 10)'
     )
     
     parser.add_argument(
         '--num-utilities',
         type=int,
-        default=1,
+        default=2,
         help='Number of utility agents (default: 5)'
     )
     
     parser.add_argument(
         '--initial-price',
         type=float,
-        default=100.0,
+        default=80.0,
         help='Initial energy price (default: 100.0)'
     )
     
     parser.add_argument(
         '--carbon-tax',
         type=float,
-        default=10.0,
+        default=20.0,
         help='Carbon tax rate (default: 10.0)'
     )
     

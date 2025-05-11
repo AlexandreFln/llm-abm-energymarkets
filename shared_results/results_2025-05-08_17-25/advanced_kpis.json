@@ -1,0 +1,90 @@
+{
+  "market_efficiency": {
+    "price_volatility": 0.0,
+    "supply_demand_mismatch": 1.0
+  },
+  "sustainability": {
+    "renewable_penetration": 0.0,
+    "renewable_stability": 1.0
+  },
+  "market_competition": {
+    "avg_concentration": 0.4188183344415279
+  },
+  "economic_impact": {
+    "economic_growth": -0.49198474229948946
+  },
+  "agent_performance": {
+    "consumer_0": {
+      "avg_profit": -1385.6000000000001,
+      "profit_volatility": 692.8000000000001,
+      "avg_resources": 346.3999999999998,
+      "resources_volatility": 692.8000000000001
+    },
+    "consumer_1": {
+      "avg_profit": -869.8206722126519,
+      "profit_volatility": 483.74723823931333,
+      "avg_resources": 354.17932778734814,
+      "resources_volatility": 483.74723823931333
+    },
+    "consumer_2": {
+      "avg_profit": -991.8,
+      "profit_volatility": 809.8013089641187,
+      "avg_resources": 661.2,
+      "resources_volatility": 809.8013089641187
+    },
+    "consumer_3": {
+      "avg_profit": -743.4,
+      "profit_volatility": 606.9835582616715,
+      "avg_resources": 495.6,
+      "resources_volatility": 606.9835582616715
+    },
+    "consumer_4": {
+      "avg_profit": -1245.6,
+      "profit_volatility": 622.8,
+      "avg_resources": 311.40000000000003,
+      "resources_volatility": 622.8
+    },
+    "prosumer_0": {
+      "avg_profit": -2209.089299143714,
+      "profit_volatility": 1679.5761453489988,
+      "avg_resources": -749.0892991437141,
+      "resources_volatility": 1679.5761453489988
+    },
+    "prosumer_1": {
+      "avg_profit": -1297.4600000000003,
+      "profit_volatility": 147.37896186362556,
+      "avg_resources": 65.53999999999994,
+      "resources_volatility": 147.37896186362553
+    },
+    "prosumer_2": {
+      "avg_profit": -1337.8579260747763,
+      "profit_volatility": 902.589716794519,
+      "avg_resources": 462.14207392522377,
+      "resources_volatility": 902.589716794519
+    },
+    "producer_0": {
+      "avg_profit": -269.09392350485433,
+      "profit_volatility": 467.7016428256111,
+      "avg_resources": 40604.20607649515,
+      "resources_volatility": 467.7016428256111
+    },
+    "producer_1": {
+      "avg_profit": -3276.073923504865,
+      "profit_volatility": 4433.627996476264,
+      "avg_resources": 41279.12607649514,
+      "resources_volatility": 4433.627996476264
+    },
+    "utility_0": {
+      "avg_profit": -15414.4,
+      "profit_volatility": 8456.863002319476,
+      "avg_resources": 2960.3000000000006,
+      "resources_volatility": 8456.863002319476
+    },
+    "utility_1": {
+      "avg_profit": -11953.722102568858,
+      "profit_volatility": 6283.343052144097,
+      "avg_resources": 20450.077897431143,
+      "resources_volatility": 6283.343052144097
+    }
+  }
+}

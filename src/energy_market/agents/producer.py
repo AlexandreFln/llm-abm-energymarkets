@@ -147,6 +147,13 @@ class EnergyProducerAgent(EnergyMarketAgent):
         }
         return state
     
+    def pay_production_costs(self) -> None:
+            for utility_id, contract in self.utility_contracts.items():
+                if contract['accepted'] & (contract['remaining_duration'] > 0):
+                    amount = contract['amount']
+                    production_costs = self.base_production_cost * amount
+                    self.update_resources(-production_costs)
+
     async def step_async(self) -> None:
         """Execute one step of the producer agent."""
         # Maintain facility and update efficiency
@@ -154,6 +161,8 @@ class EnergyProducerAgent(EnergyMarketAgent):
         
         # Fulfill existing contracts
         self.manage_contracts()
+        
+        self.pay_production_costs()
         
         # Get current state
         state = self.get_state()

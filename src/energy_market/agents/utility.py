@@ -97,6 +97,16 @@ class UtilityAgent(EnergyMarketAgent):
         
         return 0.5 * price_score + 0.3 * renewable_score + 0.2 * duration_score
         
+    def pay_producers(self) -> None:
+        for producer_id, contract in self.producer_contracts.items():
+            if contract['accepted'] & (contract['remaining_duration'] > 0):
+                total_value = contract['amount'] * contract['price']
+                producer_agent = self.model.get_agent(producer_id)
+                self.update_resources(-total_value)
+                producer_agent.update_resources(total_value)
+
+
+    
     def manage_producer_contracts(self) -> None:
         """Manage contracts with energy producers."""
         # Calculate current renewable ratio
@@ -171,6 +181,8 @@ class UtilityAgent(EnergyMarketAgent):
                 ]
                 if recent_purchases:
                     customer['avg_consumption'] = sum(recent_purchases) / len(recent_purchases)
+                
+                customer['price'] = self.current_selling_price
                     
         # Remove inactive customers
         for customer_id in inactive_customers:
@@ -233,6 +245,9 @@ class UtilityAgent(EnergyMarketAgent):
                     })
                 self.energy_stored -= amount_to_sell
                 
+        # Pay producers
+        self.pay_producers()
+        
         # Manage producer contracts
         self.manage_producer_contracts()
         
