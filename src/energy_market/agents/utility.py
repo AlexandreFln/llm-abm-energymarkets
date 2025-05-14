@@ -6,8 +6,6 @@ from .base import EnergyMarketAgent
 class UtilityAgent(EnergyMarketAgent):
     """Utility agent that buys from producers and sells to consumers."""
     
-    PERSONAS = ["eco_friendly", "profit_driven", "balanced"]
-    
     def __init__(self,
                  unique_id: str,
                  model: Any,
@@ -16,7 +14,7 @@ class UtilityAgent(EnergyMarketAgent):
                  renewable_quota: float = 0.2,
                  min_profit_margin: float = 0.1,
                  storage_capacity: float = 500.0,
-                 contract_duration: int = 30):
+                 contract_duration: int = 3):
         """Initialize utility agent.
         
         Args:
@@ -29,11 +27,11 @@ class UtilityAgent(EnergyMarketAgent):
             storage_capacity: Maximum energy storage capacity
             contract_duration: Default duration for producer contracts
         """
-        if persona not in self.PERSONAS:
-            raise ValueError(f"Invalid persona. Must be one of: {self.PERSONAS}")
             
         super().__init__(unique_id, model, persona, initial_resources)
         
+        if persona not in self.model.personas:
+            raise ValueError(f"Invalid persona. Must be one of: {self.model.personas}")
         # Configuration
         self.renewable_quota = renewable_quota
         self.min_profit_margin = min_profit_margin
@@ -51,11 +49,9 @@ class UtilityAgent(EnergyMarketAgent):
         # Initialize prices based on persona
         self._initialize_pricing_strategy()
         
-    # TODO: use LLM decision making here
     def _initialize_pricing_strategy(self) -> None:
         """Initialize pricing strategy based on persona."""
-        market_state = self.model.get_market_state()
-        avg_market_price = market_state['average_price']
+        market_price = self.model.initial_price
         
         if self.persona == "eco_friendly":
             # Bias towards renewable energy, accept lower margins
@@ -66,7 +62,7 @@ class UtilityAgent(EnergyMarketAgent):
             self.min_profit_margin *= 1.2
             self.renewable_quota *= 0.8
             
-        self.current_selling_price = avg_market_price * (1 + self.min_profit_margin)
+        self.current_selling_price = market_price * (1 + self.min_profit_margin)
     
     def evaluate_producer_contract(self, contract: Dict[str, Any]) -> float:
         """Evaluate a proposed contract from a producer.
@@ -101,6 +97,16 @@ class UtilityAgent(EnergyMarketAgent):
         
         return 0.5 * price_score + 0.3 * renewable_score + 0.2 * duration_score
         
+    def pay_producers(self) -> None:
+        for producer_id, contract in self.producer_contracts.items():
+            if contract['accepted'] & (contract['remaining_duration'] > 0):
+                total_value = contract['amount'] * contract['price']
+                producer_agent = self.model.get_agent(producer_id)
+                self.update_resources(-total_value)
+                producer_agent.update_resources(total_value)
+
+
+    
     def manage_producer_contracts(self) -> None:
         """Manage contracts with energy producers."""
         # Calculate current renewable ratio
@@ -153,6 +159,8 @@ class UtilityAgent(EnergyMarketAgent):
             score = self.evaluate_producer_contract(contract)
             if score > 0:
                 self.producer_contracts[producer_id] = contract
+                # Record the purchase transaction
+                self.record_transaction('buy', contract['amount'], contract['price'], producer_id)
                 total_contracted += contract['amount']
                 if contract['is_renewable']:
                     renewable_contracted += contract['amount']
@@ -163,7 +171,7 @@ class UtilityAgent(EnergyMarketAgent):
         inactive_customers = []
         
         for customer_id, customer in self.customer_base.items():
-            if customer['last_purchase'] < self.model.schedule.time - 24:
+            if customer['last_purchase'] < self.model._steps - 2:
                 inactive_customers.append(customer_id)
             else:
                 # Update average consumption
@@ -173,6 +181,8 @@ class UtilityAgent(EnergyMarketAgent):
                 ]
                 if recent_purchases:
                     customer['avg_consumption'] = sum(recent_purchases) / len(recent_purchases)
+                
+                customer['price'] = self.current_selling_price
                     
         # Remove inactive customers
         for customer_id in inactive_customers:
@@ -201,12 +211,12 @@ class UtilityAgent(EnergyMarketAgent):
         # Get current state
         state = self.get_state()
         market_state = self.model.get_market_state()
-        
+
         # Get LLM decision about utility strategy
-        decision = await self.llm_decision_maker.get_utility_decision_async({
-            **state,
-            'market_state': market_state
-        })
+        decision = await self.llm_decision_maker.get_utility_decision_async(
+            state=state,
+            market_state=market_state,
+        )
         
         # Apply LLM decisions
         self.renewable_quota = decision.renewable_target
@@ -226,19 +236,23 @@ class UtilityAgent(EnergyMarketAgent):
                 market_state['total_demand']
             )
             if amount_to_sell > 0:
-                self.model.add_energy_offer(
-                    self.unique_id,
-                    amount_to_sell,
-                    self.current_selling_price,
-                    False  # Not renewable
-                )
+                market_state['offers'].append({
+                    'seller_id': self.unique_id,
+                    'seller_type': 'utility',
+                    'price': self.current_selling_price,
+                    'amount': amount_to_sell,
+                    'is_renewable': False
+                    })
                 self.energy_stored -= amount_to_sell
                 
+        # Pay producers
+        self.pay_producers()
+        
         # Manage producer contracts
         self.manage_producer_contracts()
         
         # Update customer base
         self.update_customer_base()
-        
+
         # Reset spot market purchases for new step
         self.spot_market_purchases = 0.0 

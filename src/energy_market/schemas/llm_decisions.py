@@ -40,7 +40,5 @@ class UtilityDecision(BaseModel):
 class RegulatorDecision(BaseModel):
     """Schema for regulator LLM decisions."""
     adjust_carbon_tax: float = Field(description="Percentage change in carbon tax (-10 to +10)")
-    price_intervention: bool = Field(description="Whether to intervene in pricing")
     max_price_increase: float = Field(description="Maximum allowed price increase")
     enforce_renewable_quota: bool = Field(description="Whether to strictly enforce quotas")
-    issue_warnings: List[str] = Field(description="List of warning types to issue") 

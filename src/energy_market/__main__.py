@@ -15,7 +15,7 @@ def parse_args():
     parser.add_argument(
         '--num-steps',
         type=int,
-        default=3,
+        default=5,
         help='Number of simulation steps (default: 168, one week of hourly steps)'
     )
     
@@ -29,7 +29,7 @@ def parse_args():
     parser.add_argument(
         '--num-prosumers',
         type=int,
-        default=2,
+        default=5,
         help='Number of prosumer agents (default: 20)'
     )
     
@@ -50,22 +50,15 @@ def parse_args():
     parser.add_argument(
         '--initial-price',
         type=float,
-        default=100.0,
+        default=80.0,
         help='Initial energy price (default: 100.0)'
     )
     
     parser.add_argument(
         '--carbon-tax',
         type=float,
-        default=10.0,
+        default=20.0,
         help='Carbon tax rate (default: 10.0)'
-    )
-    
-    parser.add_argument(
-        '--renewable-incentive',
-        type=float,
-        default=5.0,
-        help='Renewable energy incentive (default: 5.0)'
     )
     
     parser.add_argument(
@@ -83,7 +76,7 @@ def main():
     
     # Create output directory with timestamp if not specified
     if args.output_dir is None:
-        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M')
         output_dir = Path.cwd() / f'results/results_{timestamp}'
     else:
         output_dir = Path(args.output_dir)
@@ -110,13 +103,12 @@ def main():
             num_utilities=args.num_utilities,
             initial_price=args.initial_price,
             carbon_tax_rate=args.carbon_tax,
-            renewable_incentive=args.renewable_incentive,
             output_dir=str(output_dir)
         )
         
         # Initialize logger with the output directory
         logger = SimulationLogger(base_dir=str(output_dir))
-        logger.start_new_run()
+        # logger.start_new_run()
         
         print("\nStarting simulation...")
         asyncio.run(simulation.run_and_analyze(args.num_steps, logger))

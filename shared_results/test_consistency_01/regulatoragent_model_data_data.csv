@@ -1,0 +1,6 @@
+Step,AgentID,Price_Intervention_Frequency,Oligopoly_Intervention_Frequency,Renewable_intervention_Frequency
+0,regulator,2,2,0
+1,regulator,2,4,0
+2,regulator,2,6,1
+3,regulator,2,8,3
+4,regulator,2,10,5
