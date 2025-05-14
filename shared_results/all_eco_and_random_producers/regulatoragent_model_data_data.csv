@@ -1,0 +1,4 @@
+Step,AgentID,Nb_Price_Intervention,Nb_Oligopoly_Intervention,Nb_Renewable_Intervention
+0,regulator,1,1,1
+1,regulator,1,1,1
+2,regulator,0,1,1

@@ -1,4 +1,3 @@
-from typing import Dict, Any, Optional, List
 from pydantic import BaseModel, Field
 
 class EnergyOffer(BaseModel):
@@ -31,11 +30,9 @@ class ProducerDecision(BaseModel):
 
 class UtilityDecision(BaseModel):
     """Schema for utility LLM decisions."""
-    target_contracts: int = Field(description="Number of new contracts to seek")
-    max_purchase_price: float = Field(description="Maximum price to pay for energy")
     selling_price: float = Field(description="Price to sell energy at")
     renewable_target: float = Field(description="Target percentage of renewable energy")
-    storage_strategy: str = Field(description="'increase', 'decrease', or 'maintain'")
+    storage_strategy: int = Field(description="New energy storage level to reach")
 
 class RegulatorDecision(BaseModel):
     """Schema for regulator LLM decisions."""

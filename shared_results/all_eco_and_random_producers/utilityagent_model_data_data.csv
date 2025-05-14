@@ -1,0 +1,4 @@
+Step,AgentID,Profit_Margin,Energy_Procured,Renewable_Energy_Procured_(%),Energy_Procurement_Costs,Revenues,Energy_Distributed
+0,utility_0,0.0,197,0.0,5122.0,0.0,0.0
+1,utility_0,1.0,0,0.0,0.0,532.5,18.963675213675216
+2,utility_0,1.0,0,0.0,0.0,1872.0,66.66666666666667

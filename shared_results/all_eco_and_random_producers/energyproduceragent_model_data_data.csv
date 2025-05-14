@@ -1,0 +1,4 @@
+Step,AgentID,Market_Share,Energy_Volume_Produced,Energy_Volume_Sold,Revenues,Operational_Margin,Operational_Costs,Capacity_Utilization
+0,producer_0,1.0,472.0,197,5122.0,0.23076923076923073,0,0.7986463620981388
+1,producer_0,0.0,591.0,0,0.0,0.2603550295857988,0,1.0
+2,producer_0,0.0,591.0,0,0.0,0.3403693931398417,0,0.2280972597452721

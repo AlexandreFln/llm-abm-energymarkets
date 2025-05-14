@@ -233,11 +233,9 @@ Choose the best offer among the followings and score it on a scale of 0 to 100:
             Dict containing decision details
         """
         default_response = UtilityDecision(
-            target_contracts=1,
-            max_purchase_price=state.get("current_buying_price", 80),
             selling_price=state.get("current_selling_price", 100),
             renewable_target=state.get("renewable_quota", 0.2),
-            storage_strategy="maintain"
+            storage_strategy="maintain",
         )
         
         prompt = f"""Decide on your market strategy given the following informations:

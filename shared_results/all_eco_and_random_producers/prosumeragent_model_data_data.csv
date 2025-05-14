@@ -1,0 +1,4 @@
+Step,AgentID,Energy_Consumption,Energy_Cost,Energy_Production,Revenues,Capacity_Utilization
+0,prosumer_0,0.0,0.0,46.60912402573991,0,0.3884093668811659
+1,prosumer_0,18.963675213675216,532.5,0.0,0,0.0
+2,prosumer_0,18.963675213675216,532.5,56.295576805155925,0,0.2558889854779815

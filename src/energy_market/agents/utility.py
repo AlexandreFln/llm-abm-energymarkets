@@ -223,17 +223,16 @@ class UtilityAgent(EnergyMarketAgent):
         self.current_selling_price = decision.selling_price
         
         # Manage storage based on LLM decision
-        if decision.storage_strategy == 'increase':
-            # Buy more energy for storage
+        volume_to_buy_or_sell = decision.storage_strategy - self.energy_stored
+        if volume_to_buy_or_sell > 0:
             self.spot_market_purchases = min(
+                volume_to_buy_or_sell,
                 self.storage_capacity - self.energy_stored,
-                market_state['total_supply']
             )
-        elif decision.storage_strategy == 'decrease':
-            # Sell stored energy
+        else:
             amount_to_sell = min(
                 self.energy_stored,
-                market_state['total_demand']
+                -volume_to_buy_or_sell
             )
             if amount_to_sell > 0:
                 market_state['offers'].append({
@@ -241,7 +240,7 @@ class UtilityAgent(EnergyMarketAgent):
                     'seller_type': 'utility',
                     'price': self.current_selling_price,
                     'amount': amount_to_sell,
-                    'is_renewable': False
+                    'is_renewable': self.renewable_quota > 0.5,
                     })
                 self.energy_stored -= amount_to_sell
                 
@@ -256,3 +255,15 @@ class UtilityAgent(EnergyMarketAgent):
 
         # Reset spot market purchases for new step
         self.spot_market_purchases = 0.0 
+
+
+
+        # 1.0 Retrieve live contracts with customers (former)
+        contracted_amount = customer['amount'] for customer in self.customer_base.values()
+        # 1.1 Retrieve new contracts volumes
+
+        # 2. Buy necessary amount to producers at 2 prices :
+        # - former price for already contracted amounts
+        # - new price for new contracts
+
+        # 3. 

@@ -1,0 +1,42 @@
+{
+  "market_efficiency": {
+    "price_volatility": 0.9204829650183044,
+    "supply_demand_mismatch": -0.7986463620981388
+  },
+  "sustainability": {
+    "renewable_penetration": 0.0,
+    "renewable_stability": 1.0
+  },
+  "market_competition": {
+    "avg_concentration": 1.0
+  },
+  "economic_impact": {
+    "economic_growth": -0.5125272344881554
+  },
+  "agent_performance": {
+    "consumer_0": {
+      "avg_profit": -624.0,
+      "profit_volatility": 882.4692629208113,
+      "avg_resources": 1248.0,
+      "resources_volatility": 882.4692629208113
+    },
+    "prosumer_0": {
+      "avg_profit": -2365.3333333333335,
+      "profit_volatility": 1047.2855654288164,
+      "avg_resources": -823.3333333333334,
+      "resources_volatility": 1047.2855654288164
+    },
+    "producer_0": {
+      "avg_profit": -13690.306666666665,
+      "profit_volatility": 7049.085663910998,
+      "avg_resources": 14197.693333333335,
+      "resources_volatility": 7049.085663910998
+    },
+    "utility_0": {
+      "avg_profit": -10021.0,
+      "profit_volatility": 4529.87687470642,
+      "avg_resources": 33678.0,
+      "resources_volatility": 4529.87687470642
+    }
+  }
+}
