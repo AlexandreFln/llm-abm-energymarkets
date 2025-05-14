@@ -3,7 +3,6 @@ import numpy as np
 from typing import Dict, Any
 from src.energy_market.agents.base import EnergyMarketAgent
 
-
 class ConsumerAgent(EnergyMarketAgent):
     """Agent representing an energy consumer in the market."""
     
@@ -109,23 +108,21 @@ class ConsumerAgent(EnergyMarketAgent):
             
     async def step_async(self) -> None:
         """Execute one step of the consumer agent's behavior asynchronously."""
-        # Get available offers from the market
-        available_offers = self.model.get_available_offers()
-        # Get agent's state for decision making
-        state = self._get_state()
-        # Make decision using LLM asynchronously
-        decision = await self.llm_decision_maker.get_consumer_decision_async(
-            state, available_offers
-        )
-        # Execute decision
-        self._execute_decision(decision)
-
         # Add variation in energy needs
         noise = 0.2 * np.random.random()  # Max variation of +20% or -20%
         # Decide whether it's an increase or decrease in consumption
         if noise > 0.5:
             noise *= -1 
         self.energy_needs *= (1 + noise)
+        
+        if self.energy_needs == 0:
+            self.energy_needs = np.random.randint(80, 250)
 
-        # Receive an income to pay energy needs
-        self.resources += 1000
+        utilities = [agent for agent in self.model.schedule.agents 
+                     if agent.__class__.__name__ == "UtilityAgent"]
+        utility_contracted = np.random.choice(utilities)
+        utility_contracted.customer_base[self.unique_id] = {self.unique_id: {
+            'timestamp': self.model._steps,
+            'amount': self.energy_needs,
+            'price': utility_contracted.current_selling_price,
+        }}

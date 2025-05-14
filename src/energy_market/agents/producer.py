@@ -15,6 +15,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
                  initial_resources: float = 10000.0,
                  max_production_capacity: float = 1000.0,
                  base_production_cost: float = 30.0,
+                 fixed_production_costs: float = 300.0,
                  maintenance_cost_rate: float = 0.02,
                  upgrade_cost: float = 5000.0,
                  upgrade_capacity_increase: float = 200.0,
@@ -29,6 +30,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
             initial_resources: Starting monetary resources
             max_production_capacity: Maximum production capacity per step
             base_production_cost: Base cost per unit of energy produced
+            fixed_production_costs: Fixed production costs per step
             maintenance_cost_rate: Maintenance cost as fraction of capacity
             upgrade_cost: Cost to upgrade production capacity
             upgrade_capacity_increase: Amount capacity increases per upgrade
@@ -44,6 +46,7 @@ class EnergyProducerAgent(EnergyMarketAgent):
         self.production_type = production_type
         self.max_production_capacity = max_production_capacity
         self.base_production_cost = base_production_cost
+        self.fixed_production_costs = fixed_production_costs
         self.maintenance_cost_rate = maintenance_cost_rate
         self.upgrade_cost = upgrade_cost
         self.upgrade_capacity_increase = upgrade_capacity_increase
@@ -156,37 +159,37 @@ class EnergyProducerAgent(EnergyMarketAgent):
 
     async def step_async(self) -> None:
         """Execute one step of the producer agent."""
-        # Maintain facility and update efficiency
-        self.maintain_facility()
         
-        # Fulfill existing contracts
-        self.manage_contracts()
-        
-        self.pay_production_costs()
-        
-        # Get current state
-        state = self.get_state()
-        market_state = self.model.get_market_state()
-        
+
         # Get LLM decision about production strategy
         decision = await self.llm_decision_maker.get_producer_decision_async(
-            state=state,
-            market_state=market_state,
+            persona=self.persona,
+            utility_contracts=self.utility_contracts,
+            max_production_capacity=self.max_production_capacity,
+            fixed_production_costs=self.fixed_production_costs,
+            variable_production_costs=self.base_production_cost,
         )
+        total_revenues = 0
+        total_costs = 0
+
+        for utility_contract in decision.utility_contracts:
+            amount_supplied = utility_contract.amount_supplied
+            revenues = amount_supplied * utility_contract.spot_price
+            costs = self.base_production_cost * amount_supplied + self.fixed_production_costs
+            total_revenues += revenues
+            total_costs += costs
+            spot_price = utility_contract.spot_price
+            self.utility_contracts[utility_contract.utility_id] = {
+                'amount_suplied': amount_supplied,
+                'spot_price': spot_price,
+                'revenues': revenues,
+                'operational_costs': costs,
+            }
+            utility = self.model.get_agent(utility_contract.utility_id)
+            utility_margin = utility.current_selling_price - spot_price
+            utility.profit = utility_margin * amount_supplied
+            utility.update_resources(utility.profit)
         
-        # Apply LLM decisions
-        self.current_production = min(
-            decision.production_level,
-            self.max_production_capacity
-        )
-        self.current_price = decision.price
-        
-        # Update contract acceptance policy
-        self.accept_contracts = decision.accept_contracts
-        self.min_contract_duration = decision.min_contract_duration
-        
-        # Consider capacity upgrade based on LLM decision
-        if decision.consider_upgrade:
-            print(f"    {self.unique_id} upgrades its production capacity of {self.upgrade_capacity_increase} for a cost of {self.upgrade_cost}")
-            self.max_production_capacity += self.upgrade_capacity_increase
-            self.update_resources(-self.upgrade_cost)
+        self.current_price = np.mean(c['spot_price'] for c in self.utility_contracts.values())
+        self.profit = total_revenues - total_costs
+        self.update_resources(self.profit)

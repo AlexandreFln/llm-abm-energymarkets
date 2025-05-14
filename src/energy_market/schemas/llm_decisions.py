@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from typing import List
 
 class EnergyOffer(BaseModel):
     """Schema for energy offer details."""
@@ -20,19 +21,26 @@ class ProsumerDecision(BaseModel):
     store_amount: float = Field(description="Amount of energy to store")
     consider_upgrade: bool = Field(description="Whether to consider a capacity upgrade")
 
+class UtilityContract(BaseModel):
+    """Schema for utility contract details."""
+    utility_id: str = Field(description="ID of the producer")
+    amount_supplied: float = Field(description="Amount of energy to buy")
+    spot_price: float = Field(description="Spot price of a unit of energy sold")
+
 class ProducerDecision(BaseModel):
     """Schema for producer LLM decisions."""
-    production_level: float = Field(description="Target production level")
-    price: float = Field(description="Selling price per unit")
-    accept_contracts: bool = Field(description="Whether to accept new contracts")
-    min_contract_duration: int = Field(description="Minimum contract duration to accept")
-    consider_upgrade: bool = Field(description="Whether to consider a capacity upgrade")
+    utility_contracts: List[UtilityContract] = Field(description="Contract filled with the utility")
+
+class EnergyContract(BaseModel):
+    """Schema for energy amounts."""
+    producer_id: str = Field(description="ID of the producer")
+    amount: float = Field(description="Amount of energy to buy")
 
 class UtilityDecision(BaseModel):
     """Schema for utility LLM decisions."""
-    selling_price: float = Field(description="Price to sell energy at")
-    renewable_target: float = Field(description="Target percentage of renewable energy")
-    storage_strategy: int = Field(description="New energy storage level to reach")
+    selling_price: float = Field(description="Price to sell a unit of energy")
+    producer_contracts: List[EnergyContract] = Field(description="Contracts signed with producers")
+
 
 class RegulatorDecision(BaseModel):
     """Schema for regulator LLM decisions."""

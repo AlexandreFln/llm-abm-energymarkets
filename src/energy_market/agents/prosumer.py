@@ -105,58 +105,11 @@ class ProsumerAgent(ConsumerAgent):
         """Execute one step of the prosumer agent."""
         # Calculate production and pay maintenance
         self.current_production = self.calculate_production()
-        self.pay_maintenance()
-        
-        # Get current state
-        state = self.get_state()
-        market_state = self.model.get_market_state()
-
-        # Get LLM decision about energy management strategy
-        decision = await self.llm_decision_maker.get_prosumer_decision_async(
-            state=state,
-            market_state=market_state,
-            )
-        
         # Apply LLM decisions
-        energy_needed = self.energy_needs
-        # Use stored energy based on LLM decision
-        energy_from_storage = min(
-            decision.use_storage,
-            self.energy_stored
-        )
-        energy_needed -= energy_from_storage
-        self.energy_stored -= energy_from_storage
-        # Use current production
-        energy_from_production = min(energy_needed, self.current_production)
-        energy_needed -= energy_from_production
-        remaining_production = self.current_production - energy_from_production
-        
-        # Store energy based on LLM decision
-        if remaining_production > 0:
-            amount_to_store = min(
-                decision.store_amount,
-                remaining_production,
-                self.storage_capacity - self.energy_stored
-            )
-            self.energy_stored += amount_to_store
-            remaining_production -= amount_to_store
-        
+        energy_needs = self.energy_needs - self.current_production
+        if energy_needs > 0:
+            self.energy_needs = energy_needs
         else:
-            # Still some energy needed to supply
-            await super().step_async()
-
-        # Sell remaining production based on LLM decision
-        if remaining_production > 0:
-            self.selling_price = decision.selling_price
-            market_state['offers'].append({
-                    'seller_id': self.unique_id,
-                    'seller_type': 'prosumer',
-                    'price': self.selling_price,
-                    'amount': remaining_production,
-                    'is_renewable': True
-                    })
-            
-        # Consider capacity upgrade based on LLM decision
-        if decision.consider_upgrade:
-            self.max_production_capacity += self.upgrade_capacity_increase
-            self.update_resources(-self.upgrade_cost)
+            self.energy_needs = 0
+        
+        await super().step_async()

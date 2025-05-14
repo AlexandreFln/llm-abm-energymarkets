@@ -1,7 +1,7 @@
-from typing import Dict, Any, List, Optional
-import numpy as np
+from typing import Dict, Any
 
 from .base import EnergyMarketAgent
+from .producer import EnergyProducerAgent
 
 class UtilityAgent(EnergyMarketAgent):
     """Utility agent that buys from producers and sells to consumers."""
@@ -31,7 +31,9 @@ class UtilityAgent(EnergyMarketAgent):
         super().__init__(unique_id, model, persona, initial_resources)
         
         if persona not in self.model.personas:
-            raise ValueError(f"Invalid persona. Must be one of: {self.model.personas}")
+            raise ValueError(
+                f"Invalid persona. Must be one of: {self.model.personas}"
+            )
         # Configuration
         self.renewable_quota = renewable_quota
         self.min_profit_margin = min_profit_margin
@@ -120,12 +122,14 @@ class UtilityAgent(EnergyMarketAgent):
                 renewable_contracted += amount
                 
         renewable_ratio = (
-            renewable_contracted / total_contracted if total_contracted > 0 else 0
+            renewable_contracted / total_contracted 
+            if total_contracted > 0 else 0
         )
         
         # Estimate demand
         expected_demand = sum(
-            customer['avg_consumption'] for customer in self.customer_base.values()
+            customer['avg_consumption'] 
+            for customer in self.customer_base.values()
         )
         
         # Find available producers
@@ -160,7 +164,9 @@ class UtilityAgent(EnergyMarketAgent):
             if score > 0:
                 self.producer_contracts[producer_id] = contract
                 # Record the purchase transaction
-                self.record_transaction('buy', contract['amount'], contract['price'], producer_id)
+                self.record_transaction(
+                    'buy', contract['amount'], contract['price'], producer_id
+                )
                 total_contracted += contract['amount']
                 if contract['is_renewable']:
                     renewable_contracted += contract['amount']
@@ -180,7 +186,9 @@ class UtilityAgent(EnergyMarketAgent):
                     if t['counterparty'] == customer_id
                 ]
                 if recent_purchases:
-                    customer['avg_consumption'] = sum(recent_purchases) / len(recent_purchases)
+                    customer['avg_consumption'] = (
+                        sum(recent_purchases) / len(recent_purchases)
+                    )
                 
                 customer['price'] = self.current_selling_price
                     
@@ -193,7 +201,9 @@ class UtilityAgent(EnergyMarketAgent):
         state = {
             'resources': self.resources,
             'profit': self.profit,
-            'transaction_history': self.transaction_history[-5:] if self.transaction_history else [],
+            'transaction_history': (
+                self.transaction_history[-5:] if self.transaction_history else []
+            ),
             'persona': self.persona,
             'renewable_quota': self.renewable_quota,
             'energy_stored': self.energy_stored,
@@ -208,62 +218,45 @@ class UtilityAgent(EnergyMarketAgent):
         
     async def step_async(self) -> None:
         """Execute one step of the utility agent."""
-        # Get current state
-        state = self.get_state()
-        market_state = self.model.get_market_state()
+        
+        # 1. Retrieve energy amount needed for a given step
+        energy_needs = sum(
+            contract['amount'] for contract in self.customer_base.values()
+        )
+        # 2. Satisfy contracted producers and adjust purchases
+        producers_for_llm = []
+        producers = [
+            agent for agent in self.model.schedule.agents 
+            if isinstance(agent, EnergyProducerAgent)
+        ]
+        for producer in producers:
+            max_production_capacity = producer.max_production_capacity
+            producers_for_llm.append({
+                'producer_id': producer.unique_id,
+                'max_production_capacity': max_production_capacity,
+                'spot_price': producer.current_price,
+                'is_renewable': producer.is_renewable()
+            })
 
         # Get LLM decision about utility strategy
         decision = await self.llm_decision_maker.get_utility_decision_async(
-            state=state,
-            market_state=market_state,
+            persona=self.persona,
+            energy_amount_to_supply=energy_needs,
+            producers=producers_for_llm,
         )
-        
-        # Apply LLM decisions
-        self.renewable_quota = decision.renewable_target
+
+        # 3. Aply and store decision
         self.current_selling_price = decision.selling_price
+
+        for producer_id, amount_contracted in decision.producer_contracts:
+            producer_agent = self.model.get_agent(producer_id)
+            self.producer_contracts[producer_id] = {
+                'amount_contracted': amount_contracted,
+                'is_renewable': producer_agent.is_renewable(),
+            }
+
+            producer_agent.utility_contracts[self.unique_id] = {
+                'amount_contracted': amount_contracted,
+                'is_renewable': producer_agent.is_renewable(),
+            }
         
-        # Manage storage based on LLM decision
-        volume_to_buy_or_sell = decision.storage_strategy - self.energy_stored
-        if volume_to_buy_or_sell > 0:
-            self.spot_market_purchases = min(
-                volume_to_buy_or_sell,
-                self.storage_capacity - self.energy_stored,
-            )
-        else:
-            amount_to_sell = min(
-                self.energy_stored,
-                -volume_to_buy_or_sell
-            )
-            if amount_to_sell > 0:
-                market_state['offers'].append({
-                    'seller_id': self.unique_id,
-                    'seller_type': 'utility',
-                    'price': self.current_selling_price,
-                    'amount': amount_to_sell,
-                    'is_renewable': self.renewable_quota > 0.5,
-                    })
-                self.energy_stored -= amount_to_sell
-                
-        # Pay producers
-        self.pay_producers()
-        
-        # Manage producer contracts
-        self.manage_producer_contracts()
-        
-        # Update customer base
-        self.update_customer_base()
-
-        # Reset spot market purchases for new step
-        self.spot_market_purchases = 0.0 
-
-
-
-        # 1.0 Retrieve live contracts with customers (former)
-        contracted_amount = customer['amount'] for customer in self.customer_base.values()
-        # 1.1 Retrieve new contracts volumes
-
-        # 2. Buy necessary amount to producers at 2 prices :
-        # - former price for already contracted amounts
-        # - new price for new contracts
-
-        # 3. 

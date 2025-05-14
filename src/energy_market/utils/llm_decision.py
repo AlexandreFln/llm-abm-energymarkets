@@ -17,7 +17,7 @@ from src.energy_market.schemas.llm_decisions import (
     ProsumerDecision,
     ProducerDecision,
     UtilityDecision,
-    RegulatorDecision
+    RegulatorDecision,
 )
 
 class LLMDecisionMaker:
@@ -193,7 +193,7 @@ Choose the best offer among the followings and score it on a scale of 0 to 100:
 """
         return await self._safe_llm_call_async(prompt, default_response, "prosumer")
         
-    async def get_producer_decision_async(self, state: Dict[str, Any], market_state: Dict[str, Any]) -> Dict[str, Any]:
+    async def get_producer_decision_async(self, persona: str, utility_contracts: List[Dict[str, Any]], max_production_capacity: float, fixed_production_costs: float, variable_production_costs: float) -> Dict[str, Any]:
         """Get producer decision about energy production and pricing asynchronously.
         
         Args:
@@ -203,27 +203,38 @@ Choose the best offer among the followings and score it on a scale of 0 to 100:
             Dict containing decision details
         """
         default_response = ProducerDecision(
-            production_level=state.get("max_production_capacity", 0) * 0.8,
-            price=state.get("current_price", 100),
-            accept_contracts=True,
-            min_contract_duration=3,
-            consider_upgrade=False
-        )
+            utility_contracts=[]
+            )
         
-        prompt = f"""Decide on your production and pricing strategy given the following informations::
--Your current state:
-<current_state>
-{self._format_state_for_prompt(state)}
-</current_state>
+        prompt = f"""You are given a list of utility contracts with amount each utility would like to contract.
+For each utility contract you must decide on the amount of energy you can supply and at which spot price.
 
--Market state:
-<market_state>
-{self._format_state_for_prompt(market_state)}
-</market_state>
+Your persona is the following: {persona}
+
+Please follow the following rules:
+- The total amount you supply must not exceed your max production capacity.
+- If you can't supply each utility with the amount they want, you must decide on the amount to supply to each utility.
+- Be aware that you have production costs that you must cover.
+
+<utility_contracts>
+{utility_contracts}
+</utility_contracts>
+
+<max_production_capacity>
+{max_production_capacity}
+</max_production_capacity>
+
+<fixed_production_costs>
+{fixed_production_costs}
+</fixed_production_costs>
+
+<variable_production_costs>
+{variable_production_costs}
+</variable_production_costs>
 """
         return await self._safe_llm_call_async(prompt, default_response, "producer")
         
-    async def get_utility_decision_async(self, state: Dict[str, Any], market_state: Dict[str, Any]) -> Dict[str, Any]:
+    async def get_utility_decision_async(self, persona: str, energy_amount_to_supply: float, producers: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Get utility decision about energy procurement and pricing asynchronously.
         
         Args:
@@ -233,21 +244,28 @@ Choose the best offer among the followings and score it on a scale of 0 to 100:
             Dict containing decision details
         """
         default_response = UtilityDecision(
-            selling_price=state.get("current_selling_price", 100),
-            renewable_target=state.get("renewable_quota", 0.2),
-            storage_strategy="maintain",
+            selling_price=100,
+            producer_contracts=[],
         )
         
-        prompt = f"""Decide on your market strategy given the following informations:
--Your current state:
-<current_state>
-{self._format_state_for_prompt(state)}
-</current_state>
+        prompt = f"""You are given an energy amount to supply with a list of producers with their max production capacity, spot price and renewable status.
+For each producer you must decide on the amount of energy you want to buy from them.
+You must also decide on the retail price you want to sell the energy at.
 
--Market state:
-<market_state>
-{self._format_state_for_prompt(market_state)}
-</market_state>
+Your persona is the following: {persona}
+
+Please follow the following rules:
+- If you need more energy than the sum of the max production capacity of all producers, contract maximum amount with each producer.
+- The total amount of energy you contract must be equal to the energy amount you need to supply.
+- The energy retail price must not exceed 150% of the average of the spot price of the energy you buy.
+
+<energy_amount_to_supply>
+{energy_amount_to_supply}
+</energy_amount_to_supply>
+
+<producers>
+{producers}
+</producers>
 """
         return await self._safe_llm_call_async(prompt, default_response, "utility")
         

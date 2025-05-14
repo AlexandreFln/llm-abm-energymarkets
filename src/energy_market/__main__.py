@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime
 import asyncio
 
-from simulation import EnergyMarketSimulation
+from src.energy_market.simulation import EnergyMarketSimulation
 from src.energy_market.logging_system import SimulationLogger
 
 def parse_args():
