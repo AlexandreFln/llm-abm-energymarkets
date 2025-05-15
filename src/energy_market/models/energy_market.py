@@ -116,12 +116,11 @@ class EnergyMarketModel(Model):
                 EnergyProducerAgent: {
                     'Production_Type': 'production_type',
                     'Market_Share': lambda p: safe_division(
-                        sum(c['amount'] for c in p.utility_contracts.values() if c['remaining_duration'] >= 0),
+                        sum(c['amount_supplied'] for c in p.utility_contracts.values()),
                         p.model.get_market_state()['total_demand']
                     ),
                     'Energy_Volume_Produced': lambda p: p.current_production,
-                    'Energy_Volume_Sold': lambda p: sum(c['amount'] for c in p.utility_contracts.values()
-                                                        if c['remaining_duration'] >= 0
+                    'Energy_Volume_Sold': lambda p: sum(c['amount_supplied'] for c in p.utility_contracts.values()
                                                         ),
                     'Revenues': lambda p: sum(t['total_value'] for t in get_sell_transactions(p)
                                               if t['timestamp'] == p.model._steps
@@ -131,18 +130,13 @@ class EnergyMarketModel(Model):
                         p.current_price,
                         default=1
                     ),
-                    'Operational_Costs': lambda p: sum(c['amount'] * p.base_production_cost for c in p.utility_contracts.values() if c['remaining_duration'] >= 0) +  sum(t['price'] for t in p.transaction_history if (t['type'] == 'maintenance_cost') & (t['timestamp'] == p.model._steps)),
+                    'Operational_Costs': lambda p: sum(c['amount_supplied'] * p.base_production_cost for c in p.utility_contracts.values()) +  sum(t['price'] for t in p.transaction_history if (t['type'] == 'maintenance_cost') & (t['timestamp'] == p.model._steps)),
                     'Capacity_Utilization': lambda p: safe_division(
                         p.current_production,
                         p.max_production_capacity
                     ),
                 },
                 UtilityAgent: {
-                    'Profit_Margin': lambda u: 1 - safe_division(
-                        sum(c['amount']*c['price'] for c in u.producer_contracts.values() if c['remaining_duration'] >= 0),
-                        sum(c['amount']*c['price'] for c in u.customer_base.values()),
-                        default=1
-                    ),
                     'Energy_Procured': lambda u: sum(t['amount'] for t in get_buy_transactions(u)
                                                      if t['timestamp'] == u.model._steps
                                                      ),
@@ -246,16 +240,14 @@ class EnergyMarketModel(Model):
         # First, connect consumers to utilities
         for consumer in consumers:
             # Randomly assign consumer to a utility
-            utility = np.random.choice(utilities)
-            utility.customer_base[consumer.unique_id] = {
-                'id': consumer.unique_id,
-                'avg_consumption': consumer.energy_needs,
-                'amount': consumer.energy_needs, 
-                'last_purchase': 0,
-                'is_renewable': utility.renewable_quota > 0.5,
+            utility_contracted = np.random.choice(utilities)
+            utility_contracted.customer_base[consumer.unique_id] = {
+                'timestamp': self._steps,
+                'amount': consumer.energy_needs,
+                'price': utility_contracted.current_selling_price,
             }
         
-        # Then, establish initial contracts between utilities and producers
+        # # Then, establish initial contracts between utilities and producers
         for utility in utilities:
             # Calculate utility's total energy needs from its customer base
             total_energy_needs = sum(
@@ -348,9 +340,9 @@ class EnergyMarketModel(Model):
         """
         # Calculate total supply and demand
         total_supply = sum(
-            sum(c.get('amount', 0) for c in utility.producer_contracts.values() if c['remaining_duration'] > 0)
+            sum(c.get('amount', 0) for c in utility.producer_contracts.values())
             for utility in self.market_agents['utilities'].values()
-        )
+            )
         total_demand = sum(
             consumer.energy_needs
             for consumer in self.market_agents['consumers'].values()
@@ -461,7 +453,7 @@ class EnergyMarketModel(Model):
                         1 for c in u.producer_contracts.values()
                         if c['is_renewable']
                     ) / len(u.producer_contracts) if u.producer_contracts else 0,
-                    'energy_supply': sum(p['amount'] for p in u.producer_contracts.values() if p['accepted']),
+                    'energy_supply': sum(p['amount'] for p in u.producer_contracts.values()),
                     'energy_demand': sum(c['amount'] for c in u.customer_base.values()),
                 }
                 for u in self.market_agents['utilities'].values()

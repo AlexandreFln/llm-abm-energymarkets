@@ -18,6 +18,7 @@ from src.energy_market.schemas.llm_decisions import (
     ProducerDecision,
     UtilityDecision,
     RegulatorDecision,
+    UtilityContract
 )
 
 class LLMDecisionMaker:
@@ -202,9 +203,31 @@ Choose the best offer among the followings and score it on a scale of 0 to 100:
         Returns:
             Dict containing decision details
         """
-        default_response = ProducerDecision(
-            utility_contracts=[]
-            )
+        # Create proper default response based on the structure of utility_contracts
+        default_contracts = []
+        if isinstance(utility_contracts, dict):
+            # Handle dictionary format {utility_id: {amount: value}}
+            for utility_id, contract_data in utility_contracts.items():
+                default_contracts.append(
+                    UtilityContract(
+                        utility_id=utility_id,
+                        amount_supplied=float(contract_data.get('amount', 0)),
+                        spot_price=variable_production_costs * 1.2  # Default to 20% above production cost
+                    )
+                )
+        else:
+            # Handle list format of dictionaries
+            for contract in utility_contracts:
+                if isinstance(contract, dict):
+                    default_contracts.append(
+                        UtilityContract(
+                            utility_id=str(contract.get('utility_id', '')),
+                            amount_supplied=float(contract.get('amount', 0)),
+                            spot_price=float(contract.get('price', variable_production_costs * 1.2))
+                        )
+                    )
+                    
+        default_response = ProducerDecision(utility_contracts=default_contracts)
         
         prompt = f"""You are given a list of utility contracts with amount each utility would like to contract.
 For each utility contract you must decide on the amount of energy you can supply and at which spot price.

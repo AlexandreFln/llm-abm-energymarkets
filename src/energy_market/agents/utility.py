@@ -248,10 +248,18 @@ class UtilityAgent(EnergyMarketAgent):
         # 3. Aply and store decision
         self.current_selling_price = decision.selling_price
 
-        for producer_id, amount_contracted in decision.producer_contracts:
+        for producer in decision.producer_contracts:
+            producer_id = producer.producer_id
+            amount_contracted = producer.amount
             producer_agent = self.model.get_agent(producer_id)
+            
+            # Add safety check to ensure producer_agent exists
+            if producer_agent is None:
+                print(f"Producer {producer_id} not found. Skipping contract.")
+                continue
+                
             self.producer_contracts[producer_id] = {
-                'amount_contracted': amount_contracted,
+                'amount': amount_contracted,
                 'is_renewable': producer_agent.is_renewable(),
             }
 

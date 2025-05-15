@@ -121,8 +121,8 @@ class ConsumerAgent(EnergyMarketAgent):
         utilities = [agent for agent in self.model.schedule.agents 
                      if agent.__class__.__name__ == "UtilityAgent"]
         utility_contracted = np.random.choice(utilities)
-        utility_contracted.customer_base[self.unique_id] = {self.unique_id: {
+        utility_contracted.customer_base[self.unique_id] = {
             'timestamp': self.model._steps,
             'amount': self.energy_needs,
             'price': utility_contracted.current_selling_price,
-        }}
+        }

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 
 class EnergyOffer(BaseModel):
     """Schema for energy offer details."""
@@ -25,7 +25,7 @@ class UtilityContract(BaseModel):
     """Schema for utility contract details."""
     utility_id: str = Field(description="ID of the producer")
     amount_supplied: float = Field(description="Amount of energy to buy")
-    spot_price: float = Field(description="Spot price of a unit of energy sold")
+    spot_price: Optional[float] = Field(description="Spot price of a unit of energy sold")
 
 class ProducerDecision(BaseModel):
     """Schema for producer LLM decisions."""

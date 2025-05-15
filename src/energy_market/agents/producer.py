@@ -159,12 +159,21 @@ class EnergyProducerAgent(EnergyMarketAgent):
 
     async def step_async(self) -> None:
         """Execute one step of the producer agent."""
-        
 
         # Get LLM decision about production strategy
+        # Properly format utility contracts for the LLM
+        prompt_utility_contracts = {}
+        for utility_id, contract in self.utility_contracts.items():
+            if isinstance(contract, dict):
+                # Extract the necessary information in a standardized format
+                prompt_utility_contracts[utility_id] = {
+                    'amount': contract.get('amount_contracted', 
+                                          contract.get('amount', 0)),
+                }
+        
         decision = await self.llm_decision_maker.get_producer_decision_async(
             persona=self.persona,
-            utility_contracts=self.utility_contracts,
+            utility_contracts=prompt_utility_contracts,
             max_production_capacity=self.max_production_capacity,
             fixed_production_costs=self.fixed_production_costs,
             variable_production_costs=self.base_production_cost,
@@ -174,22 +183,31 @@ class EnergyProducerAgent(EnergyMarketAgent):
 
         for utility_contract in decision.utility_contracts:
             amount_supplied = utility_contract.amount_supplied
-            revenues = amount_supplied * utility_contract.spot_price
+            # Use base_production_cost as the default if spot_price is None
+            spot_price = utility_contract.spot_price if utility_contract.spot_price is not None else self.current_price
+            revenues = amount_supplied * spot_price
             costs = self.base_production_cost * amount_supplied + self.fixed_production_costs
             total_revenues += revenues
             total_costs += costs
-            spot_price = utility_contract.spot_price
             self.utility_contracts[utility_contract.utility_id] = {
-                'amount_suplied': amount_supplied,
+                'amount_supplied': amount_supplied,
                 'spot_price': spot_price,
                 'revenues': revenues,
                 'operational_costs': costs,
             }
             utility = self.model.get_agent(utility_contract.utility_id)
+            
+            # Add safety check to ensure utility exists
+            if utility is None:
+                print(f"Utility {utility_contract.utility_id} not found. Skipping profit calculation.")
+                continue
+                
             utility_margin = utility.current_selling_price - spot_price
             utility.profit = utility_margin * amount_supplied
             utility.update_resources(utility.profit)
         
-        self.current_price = np.mean(c['spot_price'] for c in self.utility_contracts.values())
+        # Only calculate mean price if there are valid spot prices
+        if self.utility_contracts:
+            self.current_price = np.mean([c['spot_price'] for c in self.utility_contracts.values()])
         self.profit = total_revenues - total_costs
         self.update_resources(self.profit)
