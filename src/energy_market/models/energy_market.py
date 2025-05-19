@@ -1,11 +1,10 @@
 from typing import Dict, Any, List, Optional
 import numpy as np
 from mesa import Model
-from mesa.time import RandomActivation
+from mesa.time import RandomActivation, BaseScheduler
 from mesa.datacollection import DataCollector
 import asyncio
 
-from src.energy_market.agents.base import EnergyMarketAgent
 from src.energy_market.agents.consumer import ConsumerAgent
 from src.energy_market.agents.prosumer import ProsumerAgent
 from src.energy_market.agents.producer import EnergyProducerAgent
@@ -46,7 +45,8 @@ class EnergyMarketModel(Model):
         self.personas = C.PERSONAS
         
         # Initialize schedule
-        self.schedule = RandomActivation(self)
+        # self.schedule = RandomActivation(self)
+        self.schedule = BaseScheduler(self)
         
         # Initialize agent storage
         self.market_agents: Dict[str, Dict[str, Any]] = {
@@ -90,24 +90,21 @@ class EnergyMarketModel(Model):
                 "Resources": "resources",
                 "Profit": "profit",
                 "Transaction_History": "transaction_history",
-                "Transaction_Summary": EnergyMarketAgent.get_transaction_summary,
             },
             agenttype_reporters={
                 ConsumerAgent: {
-                    'Energy_Consumption': 'current_consumption',
                     'Energy_Needs': 'energy_needs',
-                    'Energy_Cost': lambda c: sum(t['total_value'] for t in get_buy_transactions(c)
-                                                 if t['timestamp'] == c.model._steps
-                                                 ),
+                    'Energy_Cost': 'energy_cost',
                 },
                 ProsumerAgent: {
                     'Production_Type': 'production_type',
-                    'Energy_Consumption': 'current_consumption',
                     'Energy_Needs': 'energy_needs',
-                    'Energy_Cost': lambda p: sum_transaction_values(get_buy_transactions(p)),
-                    'Energy_Production': lambda p: p.current_production,
-                    'Revenues': lambda p: sum(t['total_value'] for t in get_sell_transactions(p)
-                                              if t['timestamp'] == p.model._steps),
+                    'Energy_Cost': 'energy_cost',
+                    'Energy_Production': 'current_production',
+                    'Self supply ratio': lambda p: safe_division(
+                        p.current_production, 
+                        p.energy_needs
+                    ),
                     'Capacity_Utilization': lambda p: safe_division(
                         p.current_production, 
                         p.max_production_capacity
@@ -116,39 +113,32 @@ class EnergyMarketModel(Model):
                 EnergyProducerAgent: {
                     'Production_Type': 'production_type',
                     'Market_Share': lambda p: safe_division(
-                        sum(c['amount_supplied'] for c in p.utility_contracts.values()),
+                        sum(c.get('amount_supplied', 0) for c in p.utility_contracts.values()),
                         p.model.get_market_state()['total_demand']
                     ),
                     'Energy_Volume_Produced': lambda p: p.current_production,
-                    'Energy_Volume_Sold': lambda p: sum(c['amount_supplied'] for c in p.utility_contracts.values()
-                                                        ),
-                    'Revenues': lambda p: sum(t['total_value'] for t in get_sell_transactions(p)
-                                              if t['timestamp'] == p.model._steps
-                                              ),
+                    'Energy_Volume_Sold': lambda p: sum(c.get('amount_supplied', 0) for c in p.utility_contracts.values()),
+                    'Revenues': lambda p: sum(c.get('revenues', 0) for c in p.utility_contracts.values()),
                     'Operational_Margin': lambda p: 1 - safe_division(
                         p.base_production_cost,
                         p.current_price,
                         default=1
                     ),
-                    'Operational_Costs': lambda p: sum(c['amount_supplied'] * p.base_production_cost for c in p.utility_contracts.values()) +  sum(t['price'] for t in p.transaction_history if (t['type'] == 'maintenance_cost') & (t['timestamp'] == p.model._steps)),
+                    'Operational_Costs': lambda p: sum(c.get('amount_supplied', 0) * p.base_production_cost for c in p.utility_contracts.values()) +  sum(t['price'] for t in p.transaction_history if (t['type'] == 'maintenance_cost') & (t['timestamp'] == p.model._steps)),
                     'Capacity_Utilization': lambda p: safe_division(
                         p.current_production,
                         p.max_production_capacity
                     ),
                 },
                 UtilityAgent: {
-                    'Energy_Procured': lambda u: sum(t['amount'] for t in get_buy_transactions(u)
-                                                     if t['timestamp'] == u.model._steps
+                    'Energy_Procured': lambda u: sum(t.get('amount_contracted', t.get('amount_supplied', 0)) for t in u.producer_contracts.values()
                                                      ),
                     'Renewable_Energy_Procured_(%)': lambda u: safe_division(
-                        sum(t['amount'] for t in get_buy_transactions(u) if (t['is_renewable']) & (t['timestamp'] == u.model._steps)),
-                        sum(t['amount'] for t in get_buy_transactions(u) if t['timestamp'] == u.model._steps),
+                        sum(t.get('amount_contracted', 0) for t in u.producer_contracts.values() if t.get('is_renewable', False)),
+                        sum(t.get('amount_contracted', 0) for t in u.producer_contracts.values()),
                         ),
-                    'Energy_Procurement_Costs': lambda u: sum(t['total_value'] for t in get_buy_transactions(u)
-                                                              if t['timestamp'] == u.model._steps
-                                                              ),
-                    'Revenues': lambda u: sum(c['amount']*c['price'] for c in u.customer_base.values()),
-                    'Energy_Distributed': lambda u: sum(c['amount'] for c in u.customer_base.values()),
+                    'Energy_Procurement_Costs': lambda u: sum(t.get('amount_contracted', t.get('amount_supplied', 0))*t.get('spot_price', self.initial_price) for t in u.producer_contracts.values()),
+                    'Revenues': lambda u: sum(c['amount'] for c in u.customer_base.values()) * u.current_selling_price,
                 },
                 RegulatorAgent: {
                     'Nb_Price_Intervention': lambda r: len([v for v in r.violations['price_gouging'] if v['time'] == r.model._steps]),
@@ -195,7 +185,7 @@ class EnergyMarketModel(Model):
                 unique_id=f"producer_{i}",
                 model=self,
                 persona=str(np.random.choice(C.PERSONAS)),
-                production_type='oil',  #np.random.choice(C.PRODUCTION_TYPES),
+                production_type=np.random.choice(C.PRODUCTION_TYPES),
                 initial_resources=np.random.randint(30000, 1000000),
                 max_production_capacity=np.random.randint(500, 1500),
                 base_production_cost=np.random.randint(20, 50),
@@ -226,7 +216,7 @@ class EnergyMarketModel(Model):
         regulator = RegulatorAgent(
             unique_id="regulator",
             model=self,
-            persona="eco_friendly",
+            persona="pro sustainable energy",
             base_carbon_tax=self.carbon_tax_rate
         )
         self.schedule.add(regulator)
@@ -288,6 +278,15 @@ class EnergyMarketModel(Model):
                 if contracted_capacity + contract_amount >= producer.max_production_capacity:
                     producers.remove(producer)
 
+    
+    def get_agent_ids(self) -> List[str]:
+        """Get all agent IDs.
+        
+        Returns:
+            List of agent IDs
+        """
+        return [agent.unique_id for agent in self.schedule.agents]
+    
     def get_agent(self, agent_id: str) -> Optional[Any]:
         """Get agent by ID.
         
@@ -340,7 +339,7 @@ class EnergyMarketModel(Model):
         """
         # Calculate total supply and demand
         total_supply = sum(
-            sum(c.get('amount', 0) for c in utility.producer_contracts.values())
+            sum(c.get('amount_supplied', 0) for c in utility.producer_contracts.values())
             for utility in self.market_agents['utilities'].values()
             )
         total_demand = sum(
@@ -376,7 +375,6 @@ class EnergyMarketModel(Model):
         renewable_ratio = (
             renewable_production / total_production if total_production > 0 else 0
         )
-        energy_stored = sum(utility.energy_stored for utility in self.market_agents['utilities'].values())
         # Calculate market concentration using Herfindahl-Hirschman Index (HHI)
         total_capacity = sum(
             [producer.max_production_capacity
@@ -391,16 +389,6 @@ class EnergyMarketModel(Model):
         ] if total_capacity > 0 else []
         market_concentration = sum(market_shares)
         
-        # Get available producers for contracting
-        available_producers = {
-            producer.unique_id: {
-                'capacity': producer.max_production_capacity,
-                'price': producer.current_price,
-                'is_renewable': producer.is_renewable()
-            }
-            for producer in self.market_agents['producers'].values()
-        }
-        
         # Collect available offers from utilities and prosumers
         offers = []
         
@@ -410,37 +398,24 @@ class EnergyMarketModel(Model):
                 'seller_id': utility.unique_id,
                 'seller_type': 'utility',
                 'price': utility.current_selling_price,
-                'amount': sum(c['amount'] for c in utility.producer_contracts.values()) if hasattr(utility, 'producer_contracts') else 0,
+                'amount': sum(c.get('amount_supplied', c.get('amount_contracted', 0)) for c in utility.producer_contracts.values()) if hasattr(utility, 'producer_contracts') else 0,
                 'is_renewable': utility.renewable_quota > 0.5,  # Utilities mix different sources
             })
-        
-        # Add prosumer offers
-        for prosumer in self.market_agents['prosumers'].values():
-            if prosumer.energy_stored > 0 or prosumer.current_production > prosumer.energy_needs:
-                offers.append({
-                    'seller_id': prosumer.unique_id,
-                    'seller_type': 'prosumer',
-                    'price': prosumer.selling_price,
-                    'amount': prosumer.energy_stored + max(0, prosumer.current_production - prosumer.energy_needs),
-                    'is_renewable': True  # Prosumers use renewable sources
-                })
         
         return {
             'total_supply': total_supply,
             'total_demand': total_demand,
             'total_production': total_production,
-            'total_energy_stored': energy_stored,
             'average_price': avg_price,
             'average_spot_price': avg_spot_price,  # Spot market premium
             'renewable_ratio': renewable_ratio,
             'market_concentration': market_concentration,
             'carbon_tax_rate': self.get_carbon_tax_rate(),
             'total_capacity': total_capacity,
-            'available_producers': available_producers,
             'producers': {
                 p.unique_id: {
                     'capacity': p.max_production_capacity,
-                    'price': p.current_price,
+                    'spot_price': p.current_price,
                     'production': p.current_production,
                     'is_renewable': p.is_renewable()
                 }
@@ -451,9 +426,9 @@ class EnergyMarketModel(Model):
                     'selling_price': u.current_selling_price,
                     'renewable_ratio': sum(
                         1 for c in u.producer_contracts.values()
-                        if c['is_renewable']
+                        if c.get('is_renewable', False)
                     ) / len(u.producer_contracts) if u.producer_contracts else 0,
-                    'energy_supply': sum(p['amount'] for p in u.producer_contracts.values()),
+                    'energy_supply': sum(p.get('amount_supplied', p.get('amount_contracted', 0)) for p in u.producer_contracts.values()),
                     'energy_demand': sum(c['amount'] for c in u.customer_base.values()),
                 }
                 for u in self.market_agents['utilities'].values()
@@ -468,10 +443,7 @@ class EnergyMarketModel(Model):
 
         # Update market state
         market_state = self.get_market_state()
-        print(f"  Market state: Price={market_state['average_price']:.2f}, Supply={market_state['total_supply']:.2f}, Demand={market_state['total_demand']:.2f}, Production={market_state['total_production']:.2f}, Energy Stored={market_state['total_energy_stored']:.2f}")
-        
-        # Store initial resources for each agent
-        initial_resources = {agent.unique_id: agent.resources for agent in self.schedule.agents}
+        print(f"  Market state: Price={market_state['average_price']:.2f}, Supply={market_state['total_supply']:.2f}, Demand={market_state['total_demand']:.2f}, Production={market_state['total_production']:.2f}")
         
         # Create and gather all tasks
         tasks = [agent.step_async() for agent in self.schedule.agents]
@@ -479,9 +451,7 @@ class EnergyMarketModel(Model):
         
         # Calculate profit after all tasks are completed
         for agent in self.schedule.agents:
-            profit = agent.resources - initial_resources[agent.unique_id]
-            agent.profit += profit
-            print(f"    {agent.unique_id} made a profit of {profit}")
+            print(f"    {agent.unique_id} made a profit of {agent.profit}")
         
         # Collect data
         print("  Collecting data...")
@@ -492,38 +462,3 @@ class EnergyMarketModel(Model):
         
         print("  Async step complete.\n") 
         
-    def get_available_offers(self) -> List[Dict[str, Any]]:
-        """Get all available energy offers from utilities and prosumers.
-        
-        Returns:
-            List of available offers
-        """
-        offers = []
-        
-        for agent in self.schedule.agents:
-            if isinstance(agent, ProsumerAgent):
-                price = self.initial_price * (1 + 0.2 * np.random.random())
-                amount = max(0, agent.current_production - agent.energy_needs)
-                is_renewable = agent.production_type in ["solar", "wind", "hydro"]
-            elif isinstance(agent, UtilityAgent):
-                price = agent.current_selling_price
-                contracts = agent.producer_contracts.values()
-                amount = sum(contract['amount'] for contract in contracts if contract['accepted'] & (contract['duration']>0))
-                if len(contracts) > 0:
-                    is_renewable = (
-                        sum(
-                            contract.get('is_renewable', False) for contract in contracts if contract['accepted']
-                            ) / len(contracts)) > 1/2
-                else:
-                    is_renewable = False
-            else:
-                continue
-
-            offers.append({
-                'seller_id': agent.unique_id,
-                'amount': amount,
-                'price': price,
-                'is_renewable': is_renewable,
-            })
-            
-        return offers

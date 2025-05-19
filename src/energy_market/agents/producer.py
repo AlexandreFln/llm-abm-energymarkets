@@ -56,106 +56,11 @@ class EnergyProducerAgent(EnergyMarketAgent):
         self.current_production = max_production_capacity * 0.8  # Start at 80% of capacity
         self.current_price = base_production_cost * (1 + min_profit_margin * 2)
         self.utility_contracts: Dict[str, Dict[str, Any]] = {}
-        self.production_efficiency = 1.0
-        self.min_contract_duration = 3
         
     def is_renewable(self) -> bool:
         """Check if the production type is renewable."""
         return self.production_type in ["solar", "wind", "hydro"]
         
-    def negotiate_contract(self, 
-                         utility_id: str, 
-                         amount: float, 
-                         duration: int) -> Dict[str, Any]:
-        """Negotiate a contract with a utility.
-        
-        Args:
-            utility_id: ID of the utility
-            amount: Requested amount of energy per step
-            duration: Contract duration in steps
-            
-        Returns:
-            Dict containing contract terms
-        """
-        # Check if we can fulfill the contract
-        available_capacity = self.max_production_capacity
-        for contract in self.utility_contracts.values():
-            available_capacity -= contract['amount']
-            
-        if amount > available_capacity:
-            return {'accepted': False, 'reason': 'Insufficient capacity'}
-            
-        # Calculate contract price with volume discount
-        volume_discount = min(0.1, amount / self.max_production_capacity * 0.2)
-        contract_price = self.current_price * (1 - volume_discount)
-        
-        # Create contract terms
-        contract = {
-            'accepted': True,
-            'utility_id': utility_id,
-            'amount': amount,
-            'price': contract_price,
-            'duration': duration,
-            'remaining_duration': duration,
-            'is_renewable': self.is_renewable()
-        }
-        
-        self.utility_contracts[utility_id] = contract
-        return contract
-        
-    def manage_contracts(self) -> None:
-        """Manage existing contracts and update their status."""
-        expired_contracts = []
-        
-        for utility_id, contract in self.utility_contracts.items():
-            if contract['remaining_duration'] <= 0:
-                expired_contracts.append(utility_id)
-                continue
-            
-            # Update contract duration
-            contract['remaining_duration'] -= 1
-            
-        # Remove expired contracts
-        for utility_id in expired_contracts:
-            del self.utility_contracts[utility_id]
-        
-    def maintain_facility(self) -> None:
-        """Perform facility maintenance and update efficiency."""
-        maintenance_cost = self.max_production_capacity * self.maintenance_cost_rate
-        
-        # Record maintenance cost as a transaction and update resources
-        self.record_transaction('maintenance_cost', 0, maintenance_cost, self.unique_id)
-        
-        # Random events can affect efficiency
-        event_chance = np.random.random()
-        if event_chance < 0.05:  # 5% chance of efficiency drop
-            self.production_efficiency *= 0.95
-        elif event_chance > 0.95:  # 5% chance of efficiency improvement
-            self.production_efficiency = min(1.0, self.production_efficiency * 1.05)
-            
-    def get_state(self) -> Dict[str, Any]:
-        """Get the current state of the producer."""
-        state = {
-            'resources': self.resources,
-            'profit': self.profit,
-            'transaction_history': self.transaction_history[-5:] if self.transaction_history else [],
-            'persona': self.persona,
-            'production_type': self.production_type,
-            'max_production_capacity': self.max_production_capacity,
-            'current_production': self.current_production,
-            'current_price': self.current_price,
-            'production_efficiency': self.production_efficiency,
-            'contracts': list(self.utility_contracts.values()),
-            'is_renewable': self.is_renewable()
-        }
-        return state
-    
-    def pay_production_costs(self) -> None:
-            for utility_id, contract in self.utility_contracts.items():
-                if contract['accepted'] & (contract['remaining_duration'] > 0):
-                    amount = contract['amount']
-                    production_costs = self.base_production_cost * amount
-                    self.update_resources(-production_costs)
 
     async def step_async(self) -> None:
         """Execute one step of the producer agent."""
@@ -180,7 +85,15 @@ class EnergyProducerAgent(EnergyMarketAgent):
         )
         total_revenues = 0
         total_costs = 0
+        self.current_production = 0
 
+        agents_ids = self.model.get_agent_ids()
+        # Filter out contracts with non-existent utilities
+        decision.utility_contracts = [
+            contract for contract in decision.utility_contracts 
+            if contract.utility_id in agents_ids
+        ]
+        
         for utility_contract in decision.utility_contracts:
             amount_supplied = utility_contract.amount_supplied
             # Use base_production_cost as the default if spot_price is None
@@ -189,25 +102,35 @@ class EnergyProducerAgent(EnergyMarketAgent):
             costs = self.base_production_cost * amount_supplied + self.fixed_production_costs
             total_revenues += revenues
             total_costs += costs
-            self.utility_contracts[utility_contract.utility_id] = {
+            self.current_production += amount_supplied
+            # Preserve existing values and add new ones
+            if utility_contract.utility_id not in self.utility_contracts:
+                self.utility_contracts[utility_contract.utility_id] = {}
+                
+            self.utility_contracts[utility_contract.utility_id].update({
                 'amount_supplied': amount_supplied,
                 'spot_price': spot_price,
                 'revenues': revenues,
-                'operational_costs': costs,
-            }
-            utility = self.model.get_agent(utility_contract.utility_id)
+                'operational_costs': costs
+            })
             
-            # Add safety check to ensure utility exists
+            utility = self.model.get_agent(utility_contract.utility_id)
             if utility is None:
                 print(f"Utility {utility_contract.utility_id} not found. Skipping profit calculation.")
                 continue
-                
+            if self.unique_id not in utility.producer_contracts:
+                utility.producer_contracts[self.unique_id] = {}
+            utility.producer_contracts[self.unique_id].update({
+                'producer_id': self.unique_id,
+                'amount_supplied': amount_supplied,
+                'spot_price': spot_price,
+            })
             utility_margin = utility.current_selling_price - spot_price
             utility.profit = utility_margin * amount_supplied
             utility.update_resources(utility.profit)
-        
         # Only calculate mean price if there are valid spot prices
         if self.utility_contracts:
-            self.current_price = np.mean([c['spot_price'] for c in self.utility_contracts.values()])
+            decision_utilities = [u.utility_id for u in decision.utility_contracts]
+            self.current_price = np.mean([c['spot_price'] for u_id, c in self.utility_contracts.items() if u_id in decision_utilities])
         self.profit = total_revenues - total_costs
         self.update_resources(self.profit)

@@ -229,15 +229,15 @@ Choose the best offer among the followings and score it on a scale of 0 to 100:
                     
         default_response = ProducerDecision(utility_contracts=default_contracts)
         
-        prompt = f"""You are given a list of utility contracts with amount each utility would like to contract.
-For each utility contract you must decide on the amount of energy you can supply and at which spot price.
+        prompt = f"""You are given one or several utility contracts with the amount each utility would like to contract in following format: {{'utility_id': {{'amount': integer}} }}.
 
-Your persona is the following: {persona}
+For each utility contract you must decide on the amount of energy you can supply and at which spot price.
 
 Please follow the following rules:
 - The total amount you supply must not exceed your max production capacity.
 - If you can't supply each utility with the amount they want, you must decide on the amount to supply to each utility.
 - Be aware that you have production costs that you must cover.
+- Align your decision with the following persona : {persona}
 
 <utility_contracts>
 {utility_contracts}

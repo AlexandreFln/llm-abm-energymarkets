@@ -50,12 +50,20 @@ class ProsumerAgent(ConsumerAgent):
         self.upgrade_capacity_increase = upgrade_capacity_increase
         
         # Dynamic state variables
-        self.energy_price = 0.0
-        self.current_consumption = 0.0
         self.current_production = 0.0
-        self.energy_stored = 0.0
-        self.selling_price = 100.0  # Initial selling price
-        self.connected_to_grid = True
+        
+    async def step_async(self) -> None:
+        """Execute one step of the prosumer agent."""
+        # Calculate production and pay maintenance
+        self.current_production = self.calculate_production()
+        # Apply LLM decisions
+        energy_needs = self.energy_needs - self.current_production
+        if energy_needs > 0:
+            self.energy_needs = energy_needs
+        else:
+            self.energy_needs = 0
+        
+        await super().step_async()
         
     def calculate_production(self) -> float:
         """Calculate energy production for current step based on conditions."""
@@ -76,40 +84,4 @@ class ProsumerAgent(ConsumerAgent):
             production = self.max_production_capacity * np.random.uniform(0.8, 1.0)
             
         return max(0, production)
-        
-    def pay_maintenance(self) -> None:
-        """Pay maintenance costs based on capacity."""
-        maintenance_cost = self.max_production_capacity * self.maintenance_cost_rate
-        # Record maintenance cost as a transaction and update resources
-        self.record_transaction('maintenance_cost', 0, maintenance_cost, self.unique_id)
-        
-    def get_state(self) -> Dict[str, Any]:
-        """Get the current state of the prosumer."""
-        state = {
-            'resources': self.resources,
-            'profit': self.profit,
-            'transaction_history': self.transaction_history[-5:] if self.transaction_history else [],
-            'production_type': self.production_type,
-            'max_production_capacity': self.max_production_capacity,
-            'energy_price': self.energy_price,
-            'current_consumption': self.current_consumption,
-            'current_production': self.current_production,
-            'energy_stored': self.energy_stored,
-            'storage_capacity': self.storage_capacity,
-            'selling_price': self.selling_price,
-            'connected_to_grid': self.connected_to_grid
-        }
-        return state
     
-    async def step_async(self) -> None:
-        """Execute one step of the prosumer agent."""
-        # Calculate production and pay maintenance
-        self.current_production = self.calculate_production()
-        # Apply LLM decisions
-        energy_needs = self.energy_needs - self.current_production
-        if energy_needs > 0:
-            self.energy_needs = energy_needs
-        else:
-            self.energy_needs = 0
-        
-        await super().step_async()

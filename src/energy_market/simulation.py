@@ -46,7 +46,7 @@ class EnergyMarketSimulation:
         self.output_dir = Path(output_dir) if output_dir else Path.cwd()
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
-    async def run_async(self, num_steps: int = 10, logger=None) -> None:
+    async def run_async(self, num_steps: int = 10) -> None:
         """Run simulation for specified number of steps asynchronously.
         
         Args:
@@ -62,10 +62,6 @@ class EnergyMarketSimulation:
             
             # Execute model step asynchronously
             await self.model.step_async()
-            
-            # Log the step if logger is provided
-            if logger:
-                logger.log_step(self.model)
             
             # Show step timing
             step_time = time.time() - step_start
@@ -302,17 +298,6 @@ class EnergyMarketSimulation:
             },
             'agent_performance': agent_performance
         }
-    
-    def _calculate_gini(self, array: np.ndarray) -> float:
-        """Calculate Gini coefficient of inequality."""
-        array = array.flatten()
-        if np.amin(array) < 0:
-            array -= np.amin(array)
-        array += 0.0000001
-        array = np.sort(array)
-        index = np.arange(1, array.shape[0] + 1)
-        n = array.shape[0]
-        return ((np.sum((2 * index - n - 1) * array)) / (n * np.sum(array)))
 
     def create_interactive_dashboard(self, save: bool = True) -> None:
         """Create an interactive Plotly dashboard with all KPIs."""
@@ -321,14 +306,12 @@ class EnergyMarketSimulation:
         
         # Create subplot figure
         fig = make_subplots(
-            rows=3, cols=2,
+            rows=2, cols=2,
             subplot_titles=(
                 'Energy Price Trends',
                 'Supply and Demand Balance',
                 'Renewable Energy Ratio',
                 'Market Concentration',
-                'Economic Growth',
-                'Social Equity (Gini)'
             )
         )
         
@@ -392,35 +375,6 @@ class EnergyMarketSimulation:
             row=2, col=2
         )
         
-        # 5. Economic Growth
-        agent_data = self.get_agent_data()
-        resources_over_time = agent_data['Resources'].groupby('Step').mean()
-        fig.add_trace(
-            go.Scatter(
-                x=resources_over_time.index,
-                y=resources_over_time.values,
-                name='Avg Resources',
-                line=dict(color='orange')
-            ),
-            row=3, col=1
-        )
-        
-        # 6. Social Equity
-        # gini_over_time = []
-        # for step in agent_data.index.get_level_values('Step').unique():
-        #     step_resources = agent_data.xs(step, level='Step')['Resources'].values
-        #     gini_over_time.append(self._calculate_gini(step_resources))
-        
-        # fig.add_trace(
-        #     go.Scatter(
-        #         x=model_data.index,
-        #         y=gini_over_time,
-        #         name='Gini Coefficient',
-        #         line=dict(color='red')
-        #     ),
-        #     row=3, col=2
-        # )
-        
         # Update layout
         fig.update_layout(
             height=1200,
@@ -433,8 +387,6 @@ class EnergyMarketSimulation:
         if save:
             # Save as interactive HTML
             pio.write_html(fig, str(self.output_dir / 'interactive_dashboard.html'))
-            # Save as static image for thesis
-            # pio.write_image(fig, str(self.output_dir / 'dashboard.png'), scale=2)
             
             # Save KPIs to JSON
             with open(self.output_dir / 'advanced_kpis.json', 'w') as f:
@@ -470,15 +422,6 @@ class EnergyMarketSimulation:
             report += f"\n#### {agent_type}\n"
             report += f"- Average Profit: {metrics['avg_profit']:.3f}\n"
             report += f"- Profit Volatility: {metrics['profit_volatility']:.3f}\n"
-            
-            # if metrics['market_participation'] is not None:
-            #     report += f"- Market Participation Rate: {metrics['market_participation']:.3f}\n"
-            
-            # if metrics['strategy_adaptability'] is not None:
-            #     report += f"- Strategy Changes per Step: {metrics['strategy_adaptability']:.3f}\n"
-            
-            # if metrics['resource_utilization'] is not None:
-            #     report += f"- Resource Utilization Rate: {metrics['resource_utilization']:.3f}\n"
 
         report += """
 ## Visualization
@@ -489,9 +432,9 @@ Static visualizations for thesis inclusion can be found in `dashboard.png`
         with open(self.output_dir / 'simulation_report.md', 'w') as f:
             f.write(report)
         
-    async def run_and_analyze(self, num_steps: int = 10, logger = None) -> None:
+    async def run_and_analyze(self, num_steps: int = 10) -> None:
         """Run simulation and generate all analyses."""
-        await self.run_async(num_steps, logger)
+        await self.run_async(num_steps)
         self.save_data()
         self.create_interactive_dashboard()
         print("\nAnalysis complete! Check the output directory for:")

@@ -86,11 +86,11 @@ class RegulatorAgent(EnergyMarketAgent):
         
         # Check producer prices
         for producer_id, producer in market_state['producers'].items():
-            if producer['price'] > avg_price * (1 + self.max_price_increase):
+            if producer.get('spot_price', 0) > avg_price * (1 + self.max_price_increase):
                 violations.append({
                     'agent_id': producer_id,
                     'type': 'producer',
-                    'price': producer['price'],
+                    'price': producer['spot_price'],
                     'threshold': avg_price * (1 + self.max_price_increase),
                 })
                 

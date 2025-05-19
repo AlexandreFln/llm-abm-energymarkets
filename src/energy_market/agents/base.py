@@ -67,24 +67,27 @@ class EnergyMarketAgent(Agent):
             counterpart_transaction['is_renewable'] = is_renewable
             transaction['is_renewable'] = is_renewable
             # Only producer agents record a 'sell' transaction with utilities
-            self.utility_contracts[counterpart.unique_id] = {
-                    'accepted': True,
-                    'utility_id': counterpart.unique_id,
-                    'amount': amount,
-                    'price': price,
-                    'duration': self.min_contract_duration,
-                    'remaining_duration': self.min_contract_duration,
-                    'is_renewable': is_renewable
-                    }
-            counterpart.producer_contracts[self.unique_id] = {
-                    'accepted': True,
-                    'utility_id': self.unique_id,
-                    'amount': amount,
-                    'price': price,
-                    'duration': self.min_contract_duration,
-                    'remaining_duration': self.min_contract_duration,
-                    'is_renewable': is_renewable
-                    }
+            if self.unique_id not in self.utility_contracts:
+                self.utility_contracts[counterpart.unique_id] = {}
+            
+            self.utility_contracts[counterpart.unique_id].update({
+                'amount_contracted': amount,
+                'amount_supplied': amount,
+                'spot_price': price,
+                'revenues': amount*price,
+                'operational_costs': self.base_production_cost*amount + self.fixed_production_costs,
+                'is_renewable': is_renewable
+            })
+
+            if counterpart.unique_id not in counterpart.producer_contracts:
+                counterpart.producer_contracts[self.unique_id] = {}
+                
+            counterpart.producer_contracts[self.unique_id].update({
+                'amount_contracted': amount,
+                'amount_supplied': amount,
+                'spot_price': price,
+                'is_renewable': is_renewable
+            })
             
         elif transaction_type == 'buy':
             self.update_resources(-total_value)  # Cost of purchase
@@ -117,24 +120,27 @@ class EnergyMarketAgent(Agent):
                 is_renewable = counterpart.is_renewable()
                 counterpart_transaction['is_renewable'] = is_renewable
                 transaction['is_renewable'] = is_renewable
-                self.producer_contracts[counterpart.unique_id] = {
-                    'accepted': True,
-                    'producer_id': counterpart.unique_id,
-                    'amount': amount,
-                    'price': price,
-                    'duration': counterpart.min_contract_duration,
-                    'remaining_duration': counterpart.min_contract_duration,
+                
+                if self.unique_id not in self.producer_contracts:
+                    self.producer_contracts[counterpart.unique_id] = {}
+                    
+                self.producer_contracts[counterpart.unique_id].update({
+                    'amount_contracted': amount,
+                    'amount_supplied': amount,
+                    'spot_price': price,
                     'is_renewable': is_renewable
-                    }
-                counterpart.utility_contracts[self.unique_id] = {
+                })
+                
+                if counterpart.unique_id not in counterpart.utility_contracts:
+                    counterpart.utility_contracts[self.unique_id] = {}
+                    
+                counterpart.utility_contracts[self.unique_id].update({
                     'accepted': True,
                     'utility_id': self.unique_id,
                     'amount': amount,
                     'price': price,
-                    'duration': counterpart.min_contract_duration,
-                    'remaining_duration': counterpart.min_contract_duration,
                     'is_renewable': is_renewable
-                    }
+                })
                 
         else:   # Cost of maintenance, upgrade or production
             self.update_resources(-price)        

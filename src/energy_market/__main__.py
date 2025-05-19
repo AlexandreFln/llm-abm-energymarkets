@@ -4,7 +4,6 @@ from datetime import datetime
 import asyncio
 
 from src.energy_market.simulation import EnergyMarketSimulation
-from src.energy_market.logging_system import SimulationLogger
 
 def parse_args():
     """Parse command line arguments."""
@@ -15,35 +14,35 @@ def parse_args():
     parser.add_argument(
         '--num-steps',
         type=int,
-        default=2,
+        default=60,
         help='Number of simulation steps (default: 168, one week of hourly steps)'
     )
     
     parser.add_argument(
         '--num-consumers',
         type=int,
-        default=2,
+        default=100,
         help='Number of consumer agents (default: 100)'
     )
     
     parser.add_argument(
         '--num-prosumers',
         type=int,
-        default=2,
+        default=20,
         help='Number of prosumer agents (default: 20)'
     )
     
     parser.add_argument(
         '--num-producers',
         type=int,
-        default=1,
+        default=10,
         help='Number of producer agents (default: 10)'
     )
     
     parser.add_argument(
         '--num-utilities',
         type=int,
-        default=1,
+        default=5,
         help='Number of utility agents (default: 5)'
     )
     
@@ -107,11 +106,9 @@ def main():
         )
         
         # Initialize logger with the output directory
-        logger = SimulationLogger(base_dir=str(output_dir))
-        # logger.start_new_run()
         
         print("\nStarting simulation...")
-        asyncio.run(simulation.run_and_analyze(args.num_steps, logger))
+        asyncio.run(simulation.run_and_analyze(args.num_steps))
         print("\nSimulation completed successfully!")
         
     except KeyboardInterrupt:
@@ -132,4 +129,4 @@ def main():
 
 if __name__ == '__main__':
     import sys
-    sys.exit(main())
+sys.exit(main())
